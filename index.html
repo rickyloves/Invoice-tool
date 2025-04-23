@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>发票组合工具（终极稳定版）</title>
+<title>发票组合工具（终极智能备注版）</title>
 <style>
 body{font-family:sans-serif;max-width:800px;margin:auto;padding:20px}
 input,button,textarea{margin:5px 0;padding:8px;font-size:16px}
@@ -10,7 +10,7 @@ textarea{width:100%;height:220px}.record{border:1px solid #ccc;padding:10px;marg
 </style>
 </head>
 <body>
-<h2>发票组合工具（终极稳定版）</h2>
+<h2>发票组合工具（终极智能备注版）</h2>
 <label>目标金额：</label><input id="target" type="number"><br>
 <label>（可选）单张最大金额：</label><input id="maxAmount" type="number"><br>
 <button onclick="findMatch()">查找组合</button>
@@ -33,12 +33,17 @@ function findMatch() {
   const s = document.getElementById("status"), ul = document.getElementById("comboList"), e = document.getElementById("exportText");
   ul.innerHTML = ""; e.value = ""; s.innerText = "计算中...";
   setTimeout(() => {
-    const c = db.filter(x => x.金额 <= m);
+    const candidates = db.filter(x => x.金额 <= m).sort((a,b) => b.金额 - a.金额);
     let found = false; lastCombo = [];
+
     function bt(i,sum,cur) {
       if(sum === t){ lastCombo = cur.slice(); found = true; return; }
-      if(sum > t || found || i >= c.length) return;
-      for(let j = i; j < c.length; j++){ cur.push(c[j]); bt(j+1,sum+c[j].金额,cur); cur.pop(); }
+      if(sum > t || found || i >= candidates.length) return;
+      for(let j = i; j < candidates.length; j++) {
+        cur.push(candidates[j]);
+        bt(j+1,sum+candidates[j].金额,cur);
+        cur.pop();
+      }
     }
     bt(0,0,[]);
     if(!found){ s.innerText = "未找到组合"; return; }
@@ -48,30 +53,28 @@ function findMatch() {
       li.innerText = "订单号：" + x.订单号 + " 金额：" + x.金额;
       ul.appendChild(li);
     });
-    let o = "";
-    if(lastCombo.length === 1) {
-      let x = lastCombo[0];
-      o += "发票金额：" + x.金额 + "\n订单号：" + x.订单号 + " 金额：" + x.金额 + "\n\n单张直接开，不需要备注\n568881753@qq.com";
-    } else if(maxAmount.value) {
-      let g = [], cur = [], curSum = 0;
-      for(let x of lastCombo) {
-        if(curSum + x.金额 > m) { g.push({sum:curSum,list:cur}); cur = []; curSum = 0; }
-        cur.push(x); curSum += x.金额;
+
+    let groups = [], cur = [], curSum = 0;
+    for(let x of lastCombo) {
+      if(curSum + x.金额 > m) {
+        groups.push(cur); cur = []; curSum = 0;
       }
-      if(cur.length) g.push({sum:curSum,list:cur});
-      g.forEach((grp,i) => {
-        o += "发票" + (i+1) + ":" + grp.sum + "\n";
-        grp.list.forEach(x => o += "订单号：" + x.订单号 + " 金额：" + x.金额 + "\n");
-        o += "\n";
-      });
-      o += "相关订单合并，不需要备注\n568881753@qq.com";
-    } else {
-      let total = lastCombo.reduce((a,b) => a + b.金额, 0);
-      o += "发票金额：" + total + "\n";
-      lastCombo.forEach(x => o += "订单号：" + x.订单号 + " 金额：" + x.金额 + "\n");
-      o += "\n相关订单合并，不需要备注\n568881753@qq.com";
+      cur.push(x); curSum += x.金额;
     }
-    e.value = o;
+    if(cur.length) groups.push(cur);
+
+    let out = "";
+    groups.forEach((group, i) => {
+      const total = group.reduce((a,b)=>a + b.金额, 0);
+      const multi = group.length > 1;
+      out += `发票${i+1}: ${total}${multi ? "（相关订单合并）" : ""}\n`;
+      group.forEach(x => {
+        out += `订单号：${x.订单号} 金额：${x.金额}\n`;
+      });
+      out += "\n";
+    });
+    out += "不需要备注\n568881753@qq.com";
+    e.value = out;
   }, 50);
 }
 
