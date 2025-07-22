@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>发票组合计算器 V3.7</title>
+<title>发票组合计算器 V3.8</title>
 <style>
 body { font-family: Arial, sans-serif; margin: 10px; }
 h2 { margin-top: 20px; }
@@ -12,11 +12,12 @@ input, textarea, select, button { width: 100%; padding: 8px; box-sizing: border-
 button { cursor: pointer; background-color: #f0f0f0; border: 1px solid #ccc; }
 .record-item { border: 1px solid #ddd; padding: 5px; margin: 5px 0; }
 #result-output { white-space: pre-wrap; }
+#confirm-delete-btn { display: none; background-color: #ffd; }
 </style>
 </head>
 <body>
 
-<h2>发票组合计算器 V3.7</h2>
+<h2>发票组合计算器 V3.8</h2>
 
 <h2>设置参数</h2>
 <label for="target-input">目标开票金额（元）：</label>
@@ -44,6 +45,7 @@ button { cursor: pointer; background-color: #f0f0f0; border: 1px solid #ccc; }
 
 <h2>导出结果</h2>
 <textarea id="result-output" rows="10" readonly></textarea>
+<button id="confirm-delete-btn">确认删除</button>
 <button id="copy-btn">复制结果</button>
 
 <script>
@@ -501,40 +503,45 @@ let inventory = [
   {order: '32938414266', amount: 8280.00}
 ];
 let deleteRecords = [];
+let lastCombo = null;
+let lastTarget = null;
+let lastHeader = '';
 
-// 动态规划算法：0-1 背包，基于“分数*100 转整数”
+// DP 算法 with ordering
 function findCombinationDP(target, orders, maxSame, maxSingle, useLarge) {
-  // 转为整数（分）
   const targetCents = Math.round(target * 100);
-  // 过滤单张上限
-  let candidates = orders.filter(o => o.amount * 100 <= maxSingle * 100 || maxSingle === Infinity);
-  // 应用相同金额上限：分组后截断
-  if (maxSame !== Infinity) {
-    const grp = {}, temp = [];
+  let candidates = orders.filter(o => (isFinite(maxSingle) ? o.amount <= maxSingle : true));
+  // apply same count limit
+  if (isFinite(maxSame)) {
+    const countMap = {}, tmp = [];
     for (const o of candidates) {
-      const cents = Math.round(o.amount * 100);
-      grp[cents] = (grp[cents] || 0) + 1;
-      if (grp[cents] <= maxSame) temp.push(o);
+      const key = Math.round(o.amount * 100);
+      countMap[key] = (countMap[key] || 0) + 1;
+      if (countMap[key] <= maxSame) tmp.push(o);
     }
-    candidates = temp;
+    candidates = tmp;
+  }
+  // sort for large or disperse
+  if (useLarge) {
+    candidates.sort((a,b)=> b.amount - a.amount);
+  } else {
+    candidates.sort((a,b)=> a.amount - b.amount);
   }
   const n = candidates.length;
   const dp = new Int32Array(targetCents + 1).fill(-1);
   const prev = new Int32Array(targetCents + 1).fill(-1);
-  dp[0] = -2;  // 起点标记
-  // 构建 DP
+  dp[0] = -2;
   for (let i = 0; i < n; i++) {
     const cents = Math.round(candidates[i].amount * 100);
     for (let s = targetCents; s >= cents; s--) {
-      if (dp[s] === -1 && dp[s - cents] !== -1) {
+      if (dp[s] === -1 && dp[s-cents] !== -1) {
         dp[s] = i;
         prev[s] = s - cents;
       }
     }
-    if (dp[targetCents] !== -1) break;  // 提前结束
+    if (dp[targetCents] !== -1) break;
   }
   if (dp[targetCents] === -1) return null;
-  // 重构结果
   const result = [];
   let s = targetCents;
   while (s > 0) {
@@ -542,9 +549,6 @@ function findCombinationDP(target, orders, maxSame, maxSingle, useLarge) {
     result.push(candidates[idx]);
     s = prev[s];
   }
-  // 如果需要排序
-  if (useLarge) result.sort((a,b)=>b.amount - a.amount);
-  else result.sort((a,b)=>a.amount - b.amount);
   return result;
 }
 
@@ -563,7 +567,7 @@ function updateRecordList() {
       const i = +this.getAttribute('data-idx');
       const rec = deleteRecords[i];
       inventory = inventory.concat(rec.orders);
-      deleteRecords.splice(i, 1);
+      deleteRecords.splice(i,1);
       updateRecordList();
     });
   });
@@ -571,29 +575,21 @@ function updateRecordList() {
 
 // 一键组合
 document.getElementById('combine-btn').addEventListener('click', () => {
-  const tgtVal = document.getElementById('target-input').value.trim();
-  const tgt = parseFloat(tgtVal);
+  const tgt = parseFloat(document.getElementById('target-input').value.trim());
   if (isNaN(tgt)) { alert('请输入有效的目标开票金额'); return; }
-  // 读取约束
   const maxSingleRaw = document.getElementById('max-single').value.trim();
   const maxSingle = maxSingleRaw ? parseFloat(maxSingleRaw) : Infinity;
   const maxSameRaw = document.getElementById('max-same-count').value.trim();
   const maxSame = maxSameRaw ? parseInt(maxSameRaw) : Infinity;
-  const logic = document.getElementById('logic-select').value;
-  const useLarge = logic === 'large';
+  const useLarge = document.getElementById('logic-select').value === 'large';
   const header = document.getElementById('company-header').value.trim();
-
-  // 调用 DP 组合
   const combo = findCombinationDP(tgt, inventory, maxSame, maxSingle, useLarge);
+
   let text = '';
   if (combo) {
     text += `发票1：${tgt}\n`;
     if (combo.length>1) text += '（相关订单合并）\n';
-    combo.forEach(o => { text += `订单号：${o.order}，金额：${o.amount.toFixed(2)}\n`; });
-    // 移除已用
-    inventory = inventory.filter(o => !combo.includes(o));
-    deleteRecords.unshift({target: tgt, orders: combo});
-    if (deleteRecords.length>20) deleteRecords.pop();
+    combo.forEach(o=>text+=`订单号：${o.order}，金额：${o.amount.toFixed(2)}\n`);
   } else {
     text += `发票1：${tgt} —— 无法组合出满足条件的金额\n`;
   }
@@ -601,17 +597,34 @@ document.getElementById('combine-btn').addEventListener('click', () => {
   text += `\n不需要备注\n568881753@qq.com`;
 
   document.getElementById('result-output').value = text;
-  updateRecordList();
+  // store last combo and show confirm button
+  lastCombo = combo;
+  lastTarget = tgt;
+  lastHeader = header;
+  const btnConfirm = document.getElementById('confirm-delete-btn');
+  btnConfirm.style.display = combo ? 'block' : 'none';
 });
 
-// 一键复制
+// 确认删除
+document.getElementById('confirm-delete-btn').addEventListener('click', () => {
+  if (!lastCombo) return;
+  // remove and record
+  inventory = inventory.filter(o => !lastCombo.includes(o));
+  deleteRecords.unshift({target: lastTarget, orders: lastCombo});
+  if (deleteRecords.length>20) deleteRecords.pop();
+  updateRecordList();
+  // hide confirm button
+  document.getElementById('confirm-delete-btn').style.display = 'none';
+});
+
+// 复制结果
 document.getElementById('copy-btn').addEventListener('click', () => {
   const out = document.getElementById('result-output');
-  navigator.clipboard.writeText(out.value).then(() => { alert('已复制结果'); });
+  navigator.clipboard.writeText(out.value).then(()=>alert('已复制结果'));
 });
 
 // 初始化
-document.addEventListener('DOMContentLoaded', () => { updateRecordList(); });
+document.addEventListener('DOMContentLoaded',()=>{ updateRecordList(); });
 </script>
 
 </body>
