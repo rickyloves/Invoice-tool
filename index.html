@@ -1,25 +1,26 @@
-
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>发票组合计算器 V6.2</title>
+  <title>发票组合计算器 V6.3</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 10px; }
     h2 { margin-top: 20px; }
-    label { display: block; margin: 8px 0 4px; font-weight: bold; }
-    input, textarea, select, button { width: 100%; padding: 6px; margin-bottom: 10px; box-sizing: border-box; }
-    button { cursor: pointer; background: #f8f8f8; border: 1px solid #ccc; }
-    .record-item { border: 1px solid #ddd; padding: 6px; margin: 6px 0; }
-    #result-output { white-space: pre-wrap; height: 200px; }
+    label { display:block; margin:8px 0 4px; font-weight:bold; }
+    input, textarea, select, button { width:100%; padding:6px; margin-bottom:10px; box-sizing:border-box; }
+    button { cursor:pointer; background:#f0f0f0; border:1px solid #ccc; }
+    .record-item { border:1px solid #ddd; padding:6px; margin:6px 0; }
+    #result-output { white-space:pre-wrap; height:200px; }
   </style>
-</head><body>
-  <h2>发票组合计算器 V6.2</h2>
+</head>
+<body>
+  <h2>发票组合计算器 V6.3</h2>
   <h2>设置参数</h2>
   <label>目标开票金额（元）：</label><input id="target-input" placeholder="如 20000">
   <label>单张发票金额上限：</label><input id="max-single" type="number">
   <label>相同金额发票张数上限：</label><input id="max-same-count" type="number">
-  <label>组合逻辑：</label><select id="logic-select">
+  <label>组合逻辑：</label>
+  <select id="logic-select">
     <option value="large">优先使用大金额订单</option>
     <option value="disperse">优先组合金额分散</option>
   </select>
@@ -485,76 +486,94 @@ let inventory = [
     {order: '32938414266', amount: 8280.00}
 ];
 let deleteRecords = [], lastInvoices = [];
-// 子集和 DP：最大 sum ≤ limitCents
-function subsetMaxSum(orders, limitCents, maxSame) {
-  const dp = new Int32Array(limitCents+1).fill(-1), prev = new Int32Array(limitCents+1).fill(-1);
-  dp[0] = -2; let candidates = [];
-  if (isFinite(maxSame)) {
-    const countMap = {};
-    orders.forEach(o => {
-      const k = Math.round(o.amount*100);
-      countMap[k] = (countMap[k]||0)+1;
-      if (countMap[k] <= maxSame) candidates.push(o);
-    });
-  } else candidates = orders.slice();
-  candidates.forEach((o,i) => {
-    const cents = Math.round(o.amount*100);
-    for (let s=limitCents; s>=cents; s--) {
-      if (dp[s]<0 && dp[s-cents]!==-1) { dp[s]=i; prev[s]=s-cents; }
-    }
-  });
-  for (let s=limitCents; s>0; s--) {
-    if (dp[s]!==-1) {
-      const subset=[], sum=s/100;
-      let cur=s;
-      while(cur>0) { const idx=dp[cur]; subset.push(candidates[idx]); cur=prev[cur]; }
-      return {orders: subset, sum: sum};
-    }
-  }
-  return null;
-}
-// 分批匹配
+
+// 分批匹配，优先单笔最大
 function previewInvoices(target, maxSingle, maxSame, useLarge) {
-  let rem=target, temp=inventory.slice(), invoices=[];
-  temp.sort((a,b)=> useLarge? b.amount-a.amount : a.amount-b.amount);
+  let rem = target, temp = inventory.slice(), invoices = [];
+  let invoiceCount = {};
+  temp.sort((a,b)=>useLarge?b.amount-a.amount:a.amount-b.amount);
   while(rem>0) {
-    const limit=Math.min(rem, maxSingle);
-    const res=subsetMaxSum(temp, Math.round(limit*100), maxSame);
-    if(!res) return null;
-    invoices.push(res);
-    res.orders.forEach(o=>{
-      const idx=temp.findIndex(x=>x.order===o.order && x.amount===o.amount);
+    const limit = Math.min(rem, maxSingle);
+    const limitCents = Math.round(limit*100);
+    let candidates = temp.filter(o=>Math.round(o.amount*100)<=limitCents);
+    if(isFinite(maxSame)) {
+      candidates = candidates.filter(o=>{
+        const key = Math.round(o.amount*100);
+        return (invoiceCount[key]||0) < maxSame;
+      });
+    }
+    let subset = null, sum = 0;
+    if(candidates.length>0) {
+      const exact = candidates.find(o=>Math.round(o.amount*100)===limitCents);
+      if(exact) {
+        subset=[exact]; sum=exact.amount;
+      } else {
+        let single = candidates[0];
+        candidates.forEach(o=>{ if(o.amount>single.amount) single=o; });
+        subset=[single]; sum=single.amount;
+      }
+    } else {
+      const dp = new Int32Array(limitCents+1).fill(-1), prev = new Int32Array(limitCents+1).fill(-1);
+      dp[0] = -2;
+      for(let i=0;i<temp.length;i++){
+        const cents = Math.round(temp[i].amount*100);
+        for(let s=limitCents; s>=cents; s--){
+          if(dp[s]<0 && dp[s-cents]!==-1) { dp[s]=i; prev[s]=s-cents; }
+        }
+      }
+      for(let s=limitCents; s>0; s--){
+        if(dp[s]!==-1){
+          subset=[]; let cur=s;
+          while(cur>0){ subset.push(temp[dp[cur]]); cur=prev[cur]; }
+          sum=s/100; break;
+        }
+      }
+    }
+    if(!subset) return null;
+    const keySum = Math.round(sum*100);
+    invoiceCount[keySum] = (invoiceCount[keySum]||0) + 1;
+    invoices.push({orders: subset, sum: sum});
+    subset.forEach(o=>{
+      const idx = temp.findIndex(x=>x.order===o.order && x.amount===o.amount);
       if(idx>-1) temp.splice(idx,1);
     });
-    rem=+(rem-res.sum).toFixed(2);
+    rem = +(rem - sum).toFixed(2);
   }
   return invoices;
 }
+
 // 渲染
 function renderResult(list, header) {
-  const lines=[];
+  let lines = [];
   list.forEach((inv,i)=>{
-    lines.push(`发票${i+1}：${inv.sum.toFixed(2)}${inv.orders.length>1?'（相关订单合并）':''}`);
-    inv.orders.forEach(o=> lines.push(`订单号：${o.order}，金额：${o.amount.toFixed(2)}`));
+    lines.push('发票'+(i+1)+'：'+inv.sum.toFixed(2)+(inv.orders.length>1?'（相关订单合并）':''));
+    inv.orders.forEach(o=> lines.push('订单号：'+o.order+'，金额：'+o.amount.toFixed(2)));
     lines.push('');
   });
-  if(header) header.split('\n').forEach(l=>lines.push(l), lines.push(''));
-  lines.push('不需要备注', '568881753@qq.com');
-  document.getElementById('result-output').value=lines.join('\n');
+  if(header) {
+    header.split('\n').forEach(l=>lines.push(l));
+    lines.push('');
+  }
+  lines.push('不需要备注','568881753@qq.com');
+  document.getElementById('result-output').value = lines.join('\n');
 }
+
 // 更新删除记录
 function updateDeleteRecords(){
-  const c=document.getElementById('record-list'); c.innerHTML='';
-  deleteRecords.forEach((list,i)=>{
-    const d=document.createElement('div'); d.className='record-item';
-    const parts=[`批次${i+1}：共${list.length}张发票`];
-    list.forEach((inv,j)=>{
-      parts.push(`发票${j+1}：${inv.sum.toFixed(2)}${inv.orders.length>1?'（相关订单合并）':''}`);
-      inv.orders.forEach(o=> parts.push(`· ${o.order} ¥${o.amount.toFixed(2)}`));
+  const c = document.getElementById('record-list');
+  c.innerHTML='';
+  deleteRecords.forEach((lst,i)=>{
+    const d = document.createElement('div');
+    d.className='record-item';
+    let html = '批次'+(i+1)+'：共'+lst.length+'张发票<br>';
+    lst.forEach((inv,j)=>{
+      html += '发票'+(j+1)+'：'+inv.sum.toFixed(2)+(inv.orders.length>1?'（相关订单合并）':'')+'<br>';
+      inv.orders.forEach(o=> html+='· '+o.order+' ¥'+o.amount.toFixed(2)+'<br>');
     });
-    d.innerHTML=parts.join('<br>')+'<br>'; c.appendChild(d);
+    d.innerHTML=html; c.appendChild(d);
   });
 }
+
 document.addEventListener('DOMContentLoaded',()=>{
   const btnC=document.getElementById('combine-btn');
   const btnP=document.getElementById('copy-btn');
@@ -563,10 +582,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   btnC.onclick=()=>{
     const tgt=parseFloat(document.getElementById('target-input').value);
     if(isNaN(tgt)||tgt<=0){alert('请输入有效目标金额');return;}
-    const ms=document.getElementById('max-single').value.trim();
-    const maxSingle=ms?parseFloat(ms):tgt;
-    const msame=document.getElementById('max-same-count').value.trim();
-    const maxSame=msame?parseInt(msame):Infinity;
+    const ms=document.getElementById('max-single').value.trim(), maxSingle=ms?parseFloat(ms):tgt;
+    const msc=document.getElementById('max-same-count').value.trim(), maxSame=msc?parseInt(msc):Infinity;
     const useLarge=document.getElementById('logic-select').value==='large';
     const header=document.getElementById('company-header').value.trim();
     const invs=previewInvoices(tgt,maxSingle,maxSame,useLarge);
@@ -577,14 +594,15 @@ document.addEventListener('DOMContentLoaded',()=>{
   btnD.onclick=()=>{
     if(!lastInvoices)return;
     deleteRecords.unshift(lastInvoices);
-    if(deleteRecords.length>20)deleteRecords.pop();
+    if(deleteRecords.length>20) deleteRecords.pop();
     lastInvoices.forEach(inv=>inv.orders.forEach(o=>{
       const idx=inventory.findIndex(x=>x.order===o.order&&x.amount===o.amount);
-      if(idx>-1)inventory.splice(idx,1);
+      if(idx>-1) inventory.splice(idx,1);
     }));
-    updateDeleteRecords();btnD.style.display='none';
+    updateDeleteRecords(); btnD.style.display='none';
   };
   updateDeleteRecords();
 });
 </script>
-</body></html>
+</body>
+</html>
