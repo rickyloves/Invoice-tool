@@ -577,6 +577,17 @@ function previewInvoices(target, maxSingle, maxSame, logic) {
         if (sum + o.amount <= maxSingle) { bin.push(o); placed = true; break; }
       }
       if (!placed) bins.push([o]);
+    if (isFinite(maxSame)) {
+      const freq = {};
+      bins.forEach(bin => {
+        const s = bin.reduce((sum, o) => sum + o.amount, 0).toFixed(2);
+        freq[s] = (freq[s] || 0) + 1;
+        if (freq[s] > maxSame) {
+          return null;
+        }
+      });
+    }
+
     });
     return bins.map(bin=>({orders:bin,sum:bin.reduce((s,x)=>s+x.amount,0)}));
   } else {
