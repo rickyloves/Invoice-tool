@@ -1,8 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>发票组合计算器 V6.16</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 10px; }
@@ -10,19 +9,17 @@
     label { display: block; margin: 8px 0 4px; font-weight: bold; }
     input, textarea, select, button { width: 100%; padding: 6px; margin-bottom: 10px; box-sizing: border-box; }
     button { cursor: pointer; background: #f8f8f8; border: 1px solid #ccc; }
-    .record-item { border: 1px solid #ddd; padding: 6px; margin: 6px 0; }
-    #result-output { white-space: pre-wrap; height: 200px; }
+    .record-item { border:1px solid #ddd; padding:6px; margin:6px 0; }
+    #result-output { white-space:pre-wrap; height:200px; }
   </style>
 </head>
 <body>
   <h2>发票组合计算器 V6.16</h2>
+
   <h2>设置参数</h2>
-  <label>目标开票金额（元）：</label>
-  <input id="target-input" placeholder="如 20000">
-  <label>单张发票金额上限：</label>
-  <input id="max-single" type="number">
-  <label>相同金额发票张数上限：</label>
-  <input id="max-same-count" type="number">
+  <label>目标开票金额（元）：</label><input id="target-input" placeholder="如 20000">
+  <label>单张发票金额上限：</label><input id="max-single" type="number">
+  <label>相同金额发票张数上限：</label><input id="max-same-count" type="number">
   <label>组合逻辑：</label>
   <select id="logic-select">
     <option value="few">订单数尽量少</option>
@@ -31,6 +28,7 @@
   <label>公司抬头：</label>
   <textarea id="company-header" rows="2" placeholder="行1：公司名称
 行2：统一社会信用代码"></textarea>
+
   <button id="combine-btn">一键组合</button>
   <button id="copy-btn">复制结果</button>
   <button id="confirm-delete-btn" style="display:none;">确认删除</button>
@@ -42,7 +40,7 @@
   <div id="record-list"></div>
 
 <script>
-// 库存预加载
+// 预加载库存
 let inventory = [
     {order: '33897710458', amount: 610.00},
     {order: '33898104698', amount: 610.00},
@@ -497,44 +495,58 @@ let inventory = [
 ];
 let deleteRecords = [], lastInvoices = [];
 
-// 全局最少订单子集DP
-function dpGlobalMinCount(orders, targetCents, maxSingleCents) {
-  let cand = orders.filter(o => Math.round(o.amount*100) <= maxSingleCents);
-  const dpCnt = Array(targetCents+1).fill(Infinity);
-  const prev = Array(targetCents+1).fill(-1), prevIdx = Array(targetCents+1).fill(-1);
+// 单张最少订单子集 DP，考虑 same-count 限制
+function dpFewSubset(orders, limitCents, maxSame, freq) {
+  const dpCnt = Array(limitCents+1).fill(Infinity);
+  const prev = Array(limitCents+1).fill(-1), prevIdx = Array(limitCents+1).fill(-1);
   dpCnt[0] = 0;
-  for (let i = 0; i < cand.length; i++) {
-    const c = Math.round(cand[i].amount*100);
-    for (let s = targetCents; s >= c; s--) {
-      if (dpCnt[s-c] + 1 < dpCnt[s]) {
-        dpCnt[s] = dpCnt[s-c] + 1;
-        prev[s] = s - c;
-        prevIdx[s] = i;
+  for (let i = 0; i < orders.length; i++) {
+    const c = Math.round(orders[i].amount * 100);
+    for (let s = limitCents; s >= c; s--) {
+      const newCnt = dpCnt[s-c] + 1;
+      if (newCnt < dpCnt[s]) {
+        const newSum = s;
+        if ((freq[newSum] || 0) < maxSame) {
+          dpCnt[s] = newCnt;
+          prev[s] = s - c;
+          prevIdx[s] = i;
+        }
       }
     }
   }
-  if (dpCnt[targetCents] === Infinity) return null;
-  let subset = [], cur = targetCents;
+  // 选最优 sum：最小 dpCnt，再最大 sum
+  let bestCnt = Infinity, bestSum = -1, bestS = -1;
+  for (let s = 1; s <= limitCents; s++) {
+    if (dpCnt[s] < Infinity) {
+      if (dpCnt[s] < bestCnt || (dpCnt[s] === bestCnt && s > bestSum)) {
+        bestCnt = dpCnt[s];
+        bestSum = s;
+        bestS = s;
+      }
+    }
+  }
+  if (bestS < 0) return null;
+  const subset = [];
+  let cur = bestS;
   while (cur > 0) {
     const idx = prevIdx[cur];
-    subset.push(cand[idx]);
+    subset.push(orders[idx]);
     cur = prev[cur];
   }
-  return subset;
+  return { orders: subset, sum: bestSum / 100 };
 }
 
-// 最大订单数子集DP
-function dpMaxCount(orders, limitCents) {
+// 局部 DP for diverse
+function dpBest(orders, limitCents) {
   const dpSum = Array(limitCents+1).fill(-1);
   const dpCnt = Array(limitCents+1).fill(-Infinity);
   const prev = Array(limitCents+1).fill(-1), prevIdx = Array(limitCents+1).fill(-1);
   dpSum[0] = 0; dpCnt[0] = 0;
   for (let i = 0; i < orders.length; i++) {
-    const c = Math.round(orders[i].amount*100);
+    const c = Math.round(orders[i].amount * 100);
     for (let s = limitCents; s >= c; s--) {
       if (dpSum[s-c] >= 0) {
-        const newSum = dpSum[s-c] + c;
-        const newCnt = dpCnt[s-c] + 1;
+        const newSum = dpSum[s-c] + c, newCnt = dpCnt[s-c] + 1;
         if (newCnt > dpCnt[s] || (newCnt === dpCnt[s] && newSum > dpSum[s])) {
           dpSum[s] = newSum;
           dpCnt[s] = newCnt;
@@ -553,7 +565,8 @@ function dpMaxCount(orders, limitCents) {
     }
   }
   if (bestS < 0) return null;
-  let subset = [], cur = bestS;
+  const subset = [];
+  let cur = bestS;
   while (cur > 0) {
     subset.push(orders[prevIdx[cur]]);
     cur = prev[cur];
@@ -563,34 +576,39 @@ function dpMaxCount(orders, limitCents) {
 
 // 分批预览
 function previewInvoices(target, maxSingle, maxSame, logic) {
-  const tgtC = Math.round(target*100);
-  const singleC = Math.round(maxSingle*100);
   if (logic === 'few') {
-    const subset = dpGlobalMinCount(inventory, tgtC, singleC);
-    if (!subset) return null;
-    subset.sort((a,b)=>b.amount-a.amount);
-    const bins = [];
-    subset.forEach(o => {
-      let placed = false;
-      for (let bin of bins) {
-        const sum = bin.reduce((s,x)=>s+x.amount,0);
-        if (sum + o.amount <= maxSingle) { bin.push(o); placed = true; break; }
-      }
-      if (!placed) bins.push([o]);
-    });
-    return bins.map(bin=>({orders:bin,sum:bin.reduce((s,x)=>s+x.amount,0)}));
-  } else {
-    let rem = target, temp = inventory.slice(), invoices = [];
-    temp.sort((a,b)=>a.amount - b.amount);
+    let rem = target;
+    let temp = inventory.slice();
+    const invoices = [];
+    const freq = {};
     while (rem > 0) {
-      const limitC = Math.round(Math.min(rem, maxSingle)*100);
-      const subset = dpMaxCount(temp, limitC);
-      if (!subset) return null;
-      const sum = +subset.reduce((s,x)=>s+x.amount,0).toFixed(2);
-      invoices.push({orders:subset, sum});
-      subset.forEach(o=>{
-        const idx = temp.findIndex(x=>x.order===o.order&&x.amount===o.amount);
-        if (idx>-1) temp.splice(idx,1);
+      const limitC = Math.round(Math.min(rem, maxSingle) * 100);
+      const inv = dpFewSubset(temp, limitC, maxSame, freq);
+      if (!inv) return null;
+      const cents = Math.round(inv.sum * 100);
+      freq[cents] = (freq[cents] || 0) + 1;
+      invoices.push(inv);
+      inv.orders.forEach(o => {
+        const i = temp.findIndex(x => x.order === o.order && x.amount === o.amount);
+        if (i > -1) temp.splice(i, 1);
+      });
+      rem = +(rem - inv.sum).toFixed(2);
+    }
+    return invoices;
+  } else {
+    let rem = target;
+    let temp = inventory.slice();
+    const invoices = [];
+    temp.sort((a, b) => a.amount - b.amount);
+    while (rem > 0) {
+      const limitC = Math.round(Math.min(rem, maxSingle) * 100);
+      const orders = dpBest(temp, limitC);
+      if (!orders) return null;
+      const sum = +orders.reduce((s, x) => s + x.amount, 0).toFixed(2);
+      invoices.push({ orders, sum });
+      orders.forEach(o => {
+        const i = temp.findIndex(x => x.order === o.order && x.amount === o.amount);
+        if (i > -1) temp.splice(i, 1);
       });
       rem = +(rem - sum).toFixed(2);
     }
@@ -598,37 +616,37 @@ function previewInvoices(target, maxSingle, maxSame, logic) {
   }
 }
 
-// 渲染结果
+// 渲染
 function renderResult(list, header) {
   const lines = [];
-  list.forEach((inv,i) => {
-    lines.push('发票'+(i+1)+'：'+inv.sum.toFixed(2)+(inv.orders.length>1?'（相关订单合并）':''));
-    inv.orders.forEach(o=>lines.push('订单号：'+o.order+'，金额：'+o.amount.toFixed(2)));
+  list.forEach((inv, i) => {
+    lines.push('发票' + (i+1) + '：' + inv.sum.toFixed(2) + (inv.orders.length>1?'（相关订单合并）':''));
+    inv.orders.forEach(o => lines.push('订单号：' + o.order + '，金额：' + o.amount.toFixed(2)));
     lines.push('');
   });
-  if (header) { header.split('\n').forEach(l=>lines.push(l)); lines.push(''); }
+  if (header) { header.split('\n').forEach(l => lines.push(l)); lines.push(''); }
   lines.push('不需要备注','568881753@qq.com');
   document.getElementById('result-output').value = lines.join('\n');
 }
 
-// 删除记录
+// 更新删除记录
 function updateDeleteRecords() {
-  const c = document.getElementById('record-list'); c.innerHTML='';
-  deleteRecords.forEach((lst,i)=>{
-    const d = document.createElement('div'); d.className='record-item';
-    let html = '批次'+(i+1)+'：共'+lst.length+'张发票<br>';
-    lst.forEach((inv,j)=>{
-      html+='发票'+(j+1)+'：'+inv.sum.toFixed(2)+(inv.orders.length>1?'（相关订单合并）':'')+'<br>';
-      inv.orders.forEach(o=>html+='· '+o.order+' ¥'+o.amount.toFixed(2)+'<br>');
+  const c = document.getElementById('record-list'); c.innerHTML = '';
+  deleteRecords.forEach((lst, i) => {
+    const d = document.createElement('div'); d.className = 'record-item';
+    let html = '批次' + (i+1) + '：共' + lst.length + '张发票<br>';
+    lst.forEach((inv, j) => {
+      html += '发票' + (j+1) + '：' + inv.sum.toFixed(2) + (inv.orders.length>1?'（相关订单合并）':'') + '<br>';
+      inv.orders.forEach(o => html += '· ' + o.order + ' ¥' + o.amount.toFixed(2) + '<br>');
     });
     d.innerHTML = html; c.appendChild(d);
   });
 }
 
-document.addEventListener('DOMContentLoaded',()=>{
-  document.getElementById('combine-btn').onclick = ()=>{
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('combine-btn').onclick = () => {
     const tgt = parseFloat(document.getElementById('target-input').value);
-    if (isNaN(tgt)||tgt<=0){ alert('请输入有效目标金额'); return; }
+    if (isNaN(tgt)||tgt<=0) { alert('请输入有效目标金额'); return; }
     const ms = document.getElementById('max-single').value.trim();
     const maxSingle = ms?parseFloat(ms):tgt;
     const msc = document.getElementById('max-same-count').value.trim();
@@ -636,20 +654,24 @@ document.addEventListener('DOMContentLoaded',()=>{
     const logic = document.getElementById('logic-select').value;
     const header = document.getElementById('company-header').value.trim();
     const invs = previewInvoices(tgt, maxSingle, maxSame, logic);
-    const out = document.getElementById('result-output');
-    if (!invs) { out.value='无法组合出满足条件的金额'; return; }
+    if (!invs) {
+      document.getElementById('result-output').value = '无法组合出满足条件的金额';
+      return;
+    }
     lastInvoices = invs; renderResult(invs, header);
+    document.getElementById('confirm-delete-btn').style.display = 'block';
   };
-  document.getElementById('copy-btn').onclick = ()=>navigator.clipboard.writeText(document.getElementById('result-output').value).then(()=>alert('已复制结果'));
-  document.getElementById('confirm-delete-btn').onclick = ()=>{
+  document.getElementById('copy-btn').onclick = () => navigator.clipboard.writeText(document.getElementById('result-output').value).then(()=>alert('已复制结果'));
+  document.getElementById('confirm-delete-btn').onclick = () => {
     if (!lastInvoices) return;
     deleteRecords.unshift(lastInvoices);
-    if (deleteRecords.length>20) deleteRecords.pop();
-    lastInvoices.forEach(inv=>inv.orders.forEach(o=>{
-      const idx = inventory.findIndex(x=>x.order===o.order&&x.amount===o.amount);
-      if (idx>-1) inventory.splice(idx,1);
+    if (deleteRecords.length > 20) deleteRecords.pop();
+    lastInvoices.forEach(inv => inv.orders.forEach(o => {
+      const i = inventory.findIndex(x => x.order === o.order && x.amount === o.amount);
+      if (i > -1) inventory.splice(i,1);
     }));
     updateDeleteRecords();
+    document.getElementById('confirm-delete-btn').style.display = 'none';
   };
   updateDeleteRecords();
 });
