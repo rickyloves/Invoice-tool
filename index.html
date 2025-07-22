@@ -2,39 +2,35 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>发票组合计算器 V6.7</title>
+  <title>发票组合计算器 V6.2</title>
   <style>
-    body { font-family:Arial,sans-serif; margin:10px; }
-    h2 { margin-top:20px; }
-    label { display:block; margin:8px 0 4px; font-weight:bold; }
-    input, textarea, select, button { width:100%; padding:6px; margin-bottom:10px; box-sizing:border-box; }
-    button { cursor:pointer; background:#f8f8f8; border:1px solid #ccc; }
-    .record-item { border:1px solid #ddd; padding:6px; margin:6px 0; }
-    #result-output { white-space:pre-wrap; height:200px; }
+    body { font-family: Arial, sans-serif; margin: 10px; }
+    h2 { margin-top: 20px; }
+    label { display: block; margin: 8px 0 4px; font-weight: bold; }
+    input, textarea, select, button { width: 100%; padding: 6px; margin-bottom: 10px; box-sizing: border-box; }
+    button { cursor: pointer; background: #f8f8f8; border: 1px solid #ccc; }
+    .record-item { border: 1px solid #ddd; padding: 6px; margin: 6px 0; }
+    #result-output { white-space: pre-wrap; height: 200px; }
   </style>
 </head>
 <body>
-  <h2>发票组合计算器 V6.7</h2>
+  <h2>发票组合计算器 V6.2</h2>
+
   <h2>设置参数</h2>
   <label>目标开票金额（元）：</label><input id="target-input" placeholder="如 20000">
   <label>单张发票金额上限：</label><input id="max-single" type="number">
   <label>相同金额发票张数上限：</label><input id="max-same-count" type="number">
-  <label>组合逻辑：</label>
-  <select id="logic-select">
-    <option value="large">优先使用大金额订单</option>
-    <option value="disperse">优先组合金额分散</option>
-  </select>
-  <label>公司抬头：</label><textarea id="company-header" rows="2" placeholder="行1：公司名称
-行2：统一社会信用代码"></textarea>
   <button id="combine-btn">一键组合</button>
   <button id="copy-btn">复制结果</button>
   <button id="confirm-delete-btn" style="display:none;">确认删除</button>
+
   <h2>导出结果</h2>
   <textarea id="result-output" readonly></textarea>
+
   <h2>删除记录（最近20条）</h2>
   <div id="record-list"></div>
+
 <script>
-// 预加载库存
 let inventory = [
     {order: '33897710458', amount: 610.00},
     {order: '33898104698', amount: 610.00},
@@ -487,8 +483,120 @@ let inventory = [
     {order: '32948362426', amount: 8280.00},
     {order: '32938414266', amount: 8280.00}
 ];
-// ...
-// Rest of code omitted for brevity
+let deleteRecords = [], lastInvoices = [];
+
+function subsetMaxSum(orders, limitCents, maxSame) {
+  const dp = new Int32Array(limitCents+1).fill(-1), prev = new Int32Array(limitCents+1).fill(-1);
+  dp[0] = -2;
+  let candidates = [];
+  if (isFinite(maxSame)) {
+    const cnt = {};
+    orders.forEach(o => {
+      const k = Math.round(o.amount*100);
+      cnt[k] = (cnt[k]||0)+1;
+      if (cnt[k] <= maxSame) candidates.push(o);
+    });
+  } else candidates = orders.slice();
+  for (let i=0; i<candidates.length; i++) {
+    const cents = Math.round(candidates[i].amount*100);
+    for (let s=limitCents; s>=cents; s--) {
+      if (dp[s]<0 && dp[s-cents]!==-1) {
+        dp[s] = i;
+        prev[s] = s-cents;
+      }
+    }
+  }
+  for (let s=limitCents; s>0; s--) {
+    if (dp[s] !== -1) {
+      const subset = [], sum = s/100;
+      let cur = s;
+      while (cur > 0) {
+        subset.push(candidates[dp[cur]]);
+        cur = prev[cur];
+      }
+      return {orders: subset, sum: sum};
+    }
+  }
+  return null;
+}
+
+function previewInvoices(target, maxSingle, maxSame, useLarge) {
+  let rem = target, temp = inventory.slice(), invoices = [];
+  temp.sort((a,b) => useLarge ? b.amount - a.amount : a.amount - b.amount);
+  while (rem > 0) {
+    const limit = Math.min(rem, maxSingle);
+    const res = subsetMaxSum(temp, Math.round(limit*100), maxSame);
+    if (!res) return null;
+    invoices.push(res);
+    res.orders.forEach(o => {
+      const i = temp.findIndex(x => x.order === o.order && x.amount === o.amount);
+      if (i > -1) temp.splice(i,1);
+    });
+    rem = +(rem - res.sum).toFixed(2);
+  }
+  return invoices;
+}
+
+function renderResult(list, header) {
+  let lines = [];
+  list.forEach((inv,i) => {
+    lines.push('发票'+(i+1)+'：'+inv.sum.toFixed(2)+(inv.orders.length>1?'（相关订单合并）':''));
+    inv.orders.forEach(o => lines.push('订单号：'+o.order+'，金额：'+o.amount.toFixed(2)));
+    lines.push('');
+  });
+  if (header) { lines.push(header); lines.push(''); }
+  lines.push('不需要备注','568881753@qq.com');
+  document.getElementById('result-output').value = lines.join('\n');
+}
+
+function updateDeleteRecords() {
+  const c = document.getElementById('record-list');
+  c.innerHTML = '';
+  deleteRecords.forEach((lst,i) => {
+    const d = document.createElement('div');
+    d.className = 'record-item';
+    let html = '批次'+(i+1)+'：共'+lst.length+'张发票<br>';
+    lst.forEach((inv,j) => {
+      html += '发票'+(j+1)+'：'+inv.sum.toFixed(2)+(inv.orders.length>1?'（相关订单合并）':'')+'<br>';
+      inv.orders.forEach(o => html += '· '+o.order+' ¥'+o.amount.toFixed(2)+'<br>');
+    });
+    d.innerHTML = html;
+    c.appendChild(d);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const btnC = document.getElementById('combine-btn');
+  const btnP = document.getElementById('copy-btn');
+  const btnD = document.getElementById('confirm-delete-btn');
+  const out  = document.getElementById('result-output');
+  btnC.onclick = () => {
+    const tgt = parseFloat(document.getElementById('target-input').value);
+    if (isNaN(tgt) || tgt <= 0) { alert('请输入有效目标金额'); return; }
+    const ms = document.getElementById('max-single').value.trim();
+    const maxSingle = ms ? parseFloat(ms) : tgt;
+    const msc = document.getElementById('max-same-count').value.trim();
+    const maxSame = msc ? parseInt(msc) : Infinity;
+    const useLarge = document.getElementById('logic-select').value === 'large';
+    const header = document.getElementById('company-header').value.trim();
+    const invs = previewInvoices(tgt, maxSingle, maxSame, useLarge);
+    if (!invs) { out.value = '无法组合出满足条件的金额'; btnD.style.display = 'none'; }
+    else { lastInvoices = invs; renderResult(invs, header); btnD.style.display = 'block'; }
+  };
+  btnP.onclick = () => navigator.clipboard.writeText(out.value).then(() => alert('已复制结果'));
+  btnD.onclick = () => {
+    if (!lastInvoices) return;
+    deleteRecords.unshift(lastInvoices);
+    if (deleteRecords.length > 20) deleteRecords.pop();
+    lastInvoices.forEach(inv => inv.orders.forEach(o => {
+      const i = inventory.findIndex(x => x.order === o.order && x.amount === o.amount);
+      if (i > -1) inventory.splice(i,1);
+    }));
+    updateDeleteRecords();
+    btnD.style.display = 'none';
+  };
+  updateDeleteRecords();
+});
 </script>
 </body>
 </html>
