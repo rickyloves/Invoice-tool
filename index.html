@@ -1,56 +1,56 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>发票组合计算器 V4.3</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 10px; }
-    h2 { margin-top: 20px; }
-    label { display:block; margin:8px 0 4px; }
-    input, textarea, select, button { width:100%; padding:6px; margin-bottom:10px; box-sizing:border-box; }
-    button { cursor:pointer; background:#f0f0f0; border:1px solid #ccc; }
-    .record-item { border:1px solid #ddd; padding:6px; margin:6px 0; }
-    #result-output { white-space: pre-wrap; height:200px; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>发票组合计算器 V4.4</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 10px; }
+h2 { margin-top: 20px; }
+label { display:block; margin:8px 0 4px; }
+input, textarea, select, button { width:100%; padding:6px; margin-bottom:10px; box-sizing:border-box; }
+button { cursor:pointer; background:#f0f0f0; border:1px solid #ccc; }
+.record-item { border:1px solid #ddd; padding:6px; margin:6px 0; }
+#result-output { white-space: pre-wrap; height:200px; }
+</style>
 </head>
 <body>
 
-  <h2>发票组合计算器 V4.3</h2>
+<h2>发票组合计算器 V4.4</h2>
 
-  <h2>设置参数</h2>
-  <label>目标开票金额（元）：</label>
-  <input id="target-input" placeholder="如 20000">
+<h2>设置参数</h2>
+<label>目标开票金额（元）：</label>
+<input id="target-input" placeholder="如 20000">
 
-  <label>单张发票金额上限：</label>
-  <input id="max-single" type="number">
+<label>单张发票金额上限：</label>
+<input id="max-single" type="number">
 
-  <label>相同金额发票张数上限：</label>
-  <input id="max-same-count" type="number">
+<label>相同金额发票张数上限：</label>
+<input id="max-same-count" type="number">
 
-  <label>组合逻辑：</label>
-  <select id="logic-select">
-    <option value="large">优先使用大金额订单</option>
-    <option value="disperse">优先组合金额分散</option>
-  </select>
+<label>组合逻辑：</label>
+<select id="logic-select">
+  <option value="large">优先使用大金额订单</option>
+  <option value="disperse">优先组合金额分散</option>
+</select>
 
-  <label>公司抬头：</label>
-  <textarea id="company-header" rows="2" placeholder="行1：公司名称
+<label>公司抬头：</label>
+<textarea id="company-header" rows="2" placeholder="行1：公司名称
 行2：统一社会信用代码"></textarea>
 
-  <button id="combine-btn">一键组合</button>
-  <button id="copy-btn">复制结果</button>
-  <button id="confirm-delete-btn" style="display:none;">确认删除</button>
+<button id="combine-btn">一键组合</button>
+<button id="copy-btn">复制结果</button>
+<button id="confirm-delete-btn" style="display:none;">确认删除</button>
 
-  <h2>导出结果</h2>
-  <textarea id="result-output" readonly></textarea>
+<h2>导出结果</h2>
+<textarea id="result-output" readonly></textarea>
 
-  <h2>删除记录（最近20条）</h2>
-  <div id="record-list"></div>
+<h2>删除记录（最近20条）</h2>
+<div id="record-list"></div>
 
-  <script>
-  // 预加载库存数据
-  let inventory = [
+<script>
+// 预加载库存数据
+let inventory = [
   {order: '33897710458', amount: 610.00},
   {order: '33898104698', amount: 610.00},
   {order: '33898544954', amount: 610.00},
@@ -502,121 +502,105 @@
   {order: '32948362426', amount: 8280.00},
   {order: '32938414266', amount: 8280.00}
 ];
-  let deleteRecords = [], lastInvoices = [];
+let deleteRecords = [], lastOrders = [];
 
-  function subsetMaxSum(orders, limitCents, maxSame) {
-    const dp = new Int32Array(limitCents + 1).fill(-1), prev = new Int32Array(limitCents + 1).fill(-1);
-    dp[0] = -2;
-    let candidates = [];
-    if (isFinite(maxSame)) {
-      const map = {};
-      orders.forEach(o=>{ let k=Math.round(o.amount*100); map[k]=(map[k]||0)+1; if(map[k]<=maxSame) candidates.push(o); });
-    } else candidates = orders.slice();
-
-    for (let i=0; i<candidates.length; i++) {
-      const cents = Math.round(candidates[i].amount*100);
-      for (let s=limitCents; s>=cents; s--) {
-        if (dp[s]===-1 && dp[s-cents]!==-1) { dp[s]=i; prev[s]=s-cents; }
-      }
-    }
-    for (let s=limitCents; s>=1; s--) {
-      if (dp[s]!==-1) {
-        const subset = []; let cur=s;
-        while(cur>0) { const idx=dp[cur]; subset.push(candidates[idx]); cur=prev[cur]; }
-        return subset;
-      }
-    }
-    return null;
-  }
-
-  function previewInvoices(target, maxSingle, maxSame, useLarge) {
-    let rem=target, temp=inventory.slice(), invoices=[];
-    temp.sort((a,b)=> useLarge? b.amount-a.amount : a.amount-b.amount);
-    while (rem>0) {
-      const limit=Math.min(rem,maxSingle);
-      let pick=temp.find(o=>o.amount<=limit);
-      let subset,sum;
-      if (pick) { subset=[pick]; sum=pick.amount; }
-      else {
-        subset=subsetMaxSum(temp,Math.round(limit*100),maxSame);
-        if (!subset) { invoices.push({error:true,sum:rem}); break; }
-        sum=subset.reduce((a,o)=>a+o.amount,0);
-      }
-      invoices.push({error:false,orders:subset,sum:sum});
-      subset.forEach(o=>{ const idx=temp.findIndex(x=>x.order===o.order&&x.amount===o.amount); if(idx>-1) temp.splice(idx,1); });
-      rem=+(rem-sum).toFixed(2);
-    }
-    return invoices;
-  }
-
-  function renderResult(invoices, header) {
-    let txt='';
-    invoices.forEach((inv,i)=>{
-      if(inv.error) {
-        txt+=`发票${i+1}：${inv.sum.toFixed(2)} —— 无法组合出满足条件的金额\n\n`;
-      } else {
-        txt+=`发票${i+1}：${inv.sum.toFixed(2)}${inv.orders.length>1?'（相关订单合并）':''}\n`;
-        inv.orders.forEach(o=>txt+=`订单号：${o.order}，金额：${o.amount.toFixed(2)}\n`);
-        txt+='\n';
-      }
+// 单次 DP 精确匹配
+function findExact(target, orders, maxSame, maxSingle) {
+  const targetCents = Math.round(target*100);
+  // filter by maxSingle and maxSame
+  let filtered = orders.filter(o=> o.amount <= maxSingle);
+  if (isFinite(maxSame)) {
+    const map = {}, temp=[];
+    filtered.forEach(o=> {
+      const k=Math.round(o.amount*100);
+      map[k]=(map[k]||0)+1;
+      if(map[k]<=maxSame) temp.push(o);
     });
-    if(header) txt+=`${header}\n\n`;
-    txt+='不需要备注\n568881753@qq.com';
-    document.getElementById('result-output').value=txt;
+    filtered = temp;
   }
+  const n = filtered.length;
+  const dp = new Int32Array(targetCents+1).fill(-1);
+  const prev = new Int32Array(targetCents+1).fill(-1);
+  dp[0] = -2;
+  for(let i=0;i<n;i++) {
+    const cents = Math.round(filtered[i].amount*100);
+    for(let s=targetCents;s>=cents;s--) {
+      if(dp[s]===-1 && dp[s-cents]!==-1) {
+        dp[s]=i;
+        prev[s]=s-cents;
+      }
+    }
+    if(dp[targetCents]!==-1) break;
+  }
+  if(dp[targetCents]===-1) return null;
+  const res=[];
+  let cur=targetCents;
+  while(cur>0) {
+    const idx=dp[cur];
+    res.push(filtered[idx]);
+    cur=prev[cur];
+  }
+  return res;
+}
 
-  function updateDeleteRecords() {
-    const container=document.getElementById('record-list');
-    container.innerHTML='';
-    deleteRecords.forEach((rec,idx)=>{
-      let html=`批次${idx+1}：共${rec.length}张发票<br>`;
-      rec.forEach((inv,j)=>{
-        if(inv.error) { html+=`发票${j+1}：${inv.sum.toFixed(2)} —— 无法组合<br>`; }
-        else {
-          html+=`发票${j+1}：${inv.sum.toFixed(2)}${inv.orders.length>1?'（相关订单合并）':''}<br>`;
-          inv.orders.forEach(o=>html+=`· ${o.order} ¥${o.amount.toFixed(2)}<br>`);
-        }
-      });
-      const d=document.createElement('div'); d.className='record-item'; d.innerHTML=html;
-      container.appendChild(d);
+// 渲染结果
+function render(orders, target, header) {
+  let txt='';
+  if(orders) {
+    txt += `发票1：${target}${orders.length>1?'（相关订单合并）':''}\n`;
+    orders.forEach(o=> {
+      txt += `订单号：${o.order}，金额：${o.amount.toFixed(2)}\n`;
     });
+  } else {
+    txt += `发票1：${target} —— 无法组合出满足条件的金额\n`;
   }
+  txt += `\n${header}\n\n不需要备注\n568881753@qq.com`;
+  document.getElementById('result-output').value=txt;
+}
 
-  document.addEventListener('DOMContentLoaded',()=>{
-    document.getElementById('combine-btn').onclick=()=>{
-      const tgt=parseFloat(document.getElementById('target-input').value);
-      if(isNaN(tgt)||tgt<=0){alert('请输入有效目标金额');return;}
-      const maxSingleRaw=document.getElementById('max-single').value;
-      const maxSingle=maxSingleRaw?parseFloat(maxSingleRaw):tgt;
-      const maxSameRaw=document.getElementById('max-same-count').value;
-      const maxSame=maxSameRaw?parseInt(maxSameRaw):Infinity;
-      const useLarge=document.getElementById('logic-select').value==='large';
-      const header=document.getElementById('company-header').value.trim();
-      const invs=previewInvoices(tgt,maxSingle,maxSame,useLarge);
-      lastInvoices=invs; renderResult(invs,header);
-      document.getElementById('confirm-delete-btn').style.display=invs.length?'block':'none';
-    };
-
-    document.getElementById('confirm-delete-btn').onclick=()=>{
-      if(!lastInvoices.length)return;
-      deleteRecords.unshift(lastInvoices);
-      if(deleteRecords.length>20)deleteRecords.pop();
-      lastInvoices.forEach(inv=>{ if(!inv.error)inv.orders.forEach(o=>{
-        const i=inventory.findIndex(x=>x.order===o.order&&x.amount===o.amount);
-        if(i>-1)inventory.splice(i,1);
-      });});
-      updateDeleteRecords();
-      document.getElementById('confirm-delete-btn').style.display='none';
-    };
-
-    document.getElementById('copy-btn').onclick=()=>{
-      navigator.clipboard.writeText(document.getElementById('result-output').value)
-        .then(()=>alert('已复制结果'));
-    };
-
-    updateDeleteRecords();
+// 更新删除记录
+function updateDel() {
+  const c=document.getElementById('record-list'); c.innerHTML='';
+  deleteRecords.forEach((orders,i)=> {
+    const d=document.createElement('div'); d.className='record-item';
+    let html=`批次${i+1}：`+orders.map(o=>`[${o.order} ¥${o.amount.toFixed(2)}]`).join(',');
+    d.innerHTML=html; c.appendChild(d);
   });
-  </script>
+}
 
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('combine-btn').onclick=()=>{
+    const tgt=parseFloat(document.getElementById('target-input').value);
+    if(isNaN(tgt)||tgt<=0){alert('请输入有效目标金额');return;}
+    const maxSingleRaw=document.getElementById('max-single').value;
+    const maxSingle=maxSingleRaw?parseFloat(maxSingleRaw):Infinity;
+    const maxSameRaw=document.getElementById('max-same-count').value;
+    const maxSame=maxSameRaw?parseInt(maxSameRaw):Infinity;
+    let ords=inventory.slice();
+    // sort
+    const useLarge=document.getElementById('logic-select').value==='large';
+    ords.sort((a,b)=>useLarge?b.amount-a.amount:a.amount-b.amount);
+    const found=findExact(tgt, ords, maxSame, maxSingle);
+    lastOrders=found||[];
+    render(found, tgt, document.getElementById('company-header').value.trim());
+    document.getElementById('confirm-delete-btn').style.display=found?'block':'none';
+  };
+  document.getElementById('confirm-delete-btn').onclick=()=>{
+    if(!lastOrders.length)return;
+    deleteRecords.unshift(lastOrders);
+    if(deleteRecords.length>20)deleteRecords.pop();
+    lastOrders.forEach(o=> {
+      const idx=inventory.findIndex(x=>x.order===o.order&&x.amount===o.amount);
+      if(idx>-1)inventory.splice(idx,1);
+    });
+    updateDel();
+    document.getElementById('confirm-delete-btn').style.display='none';
+  };
+  document.getElementById('copy-btn').onclick=()=> {
+    navigator.clipboard.writeText(document.getElementById('result-output').value).then(()=>alert('已复制结果'));
+  };
+  updateDel();
+});  
+</script>
 </body>
 </html>
