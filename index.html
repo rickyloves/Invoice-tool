@@ -2,24 +2,28 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>发票组合计算器 V6.19</title>
+  <title>发票组合计算器 V6.20</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 10px; }
-    h2 { margin-top: 20px; }
-    label { display: block; margin: 8px 0 4px; font-weight: bold; }
-    input, textarea, select, button { width: 100%; padding: 6px; margin-bottom: 10px; box-sizing: border-box; }
-    button { cursor: pointer; background: #f8f8f8; border: 1px solid #ccc; }
-    .record-item { border: 1px solid #ddd; padding: 6px; margin: 6px 0; }
-    #result-output { white-space: pre-wrap; height: 200px; }
+    body {{ font-family: Arial, sans-serif; margin: 10px; }}
+    h2 {{ margin-top: 20px; }}
+    label {{ display: block; margin: 8px 0 4px; font-weight: bold; }}
+    input, textarea, select, button {{ width: 100%; padding: 6px; margin-bottom: 10px; box-sizing: border-box; }}
+    button {{ cursor: pointer; margin-right: 4px; }}
+    .record-item {{ border: 1px solid #ddd; padding: 6px; margin: 6px 0; }}
+    #header-history button {{ display: inline-block; margin: 2px 4px; padding: 4px 8px; }}
+    #result-output {{ white-space: pre-wrap; height: 200px; }}
   </style>
 </head>
 <body>
-  <h2>发票组合计算器 V6.19</h2>
+  <h2>发票组合计算器 V6.20</h2>
 
   <h2>设置参数</h2>
-  <label>目标开票金额（元）：</label><input id="target-input" placeholder="如 20000">
-  <label>单张发票金额上限：</label><input id="max-single" type="number">
-  <label>相同金额发票张数上限：</label><input id="max-same-count" type="number">
+  <label>目标开票金额（元）：</label>
+  <input id="target-input" placeholder="如 20000">
+  <label>单张发票金额上限：</label>
+  <input id="max-single" type="number">
+  <label>相同金额发票张数上限：</label>
+  <input id="max-same-count" type="number">
   <label>组合逻辑：</label>
   <select id="logic-select">
     <option value="few">订单数尽量少</option>
@@ -495,73 +499,97 @@ let inventory = [
     {order: '32938414266', amount: 8280.00}
 ];
 let deleteRecords = [], lastInvoices = [];
-// 历史抬头
-function loadHeaderHistory() { return JSON.parse(localStorage.getItem("headerHistory") || "[]"); }
+
+// Header history via localStorage
+function loadHeaderHistory() {
+  return JSON.parse(localStorage.getItem('headerHistory') || '[]');
+}
 function saveHeaderHistory(header) {
   if (!header) return;
   let hist = loadHeaderHistory();
   hist = hist.filter(h => h !== header);
   hist.unshift(header);
   if (hist.length > 20) hist.pop();
-  localStorage.setItem("headerHistory", JSON.stringify(hist));
+  localStorage.setItem('headerHistory', JSON.stringify(hist));
 }
-function renderHeaderHistory()
-    updateDeleteRecords(); {
+function renderHeaderHistory() {
   const hist = loadHeaderHistory();
-  const div = document.getElementById("header-history");
-  div.innerHTML = ""; hist.forEach(h => {
-    const btn = document.createElement("button");
+  const div = document.getElementById('header-history');
+  div.innerHTML = '';
+  hist.forEach(h => {
+    const btn = document.createElement('button');
     btn.textContent = h;
-    btn.onclick = () => document.getElementById("company-header").value = h;
+    btn.onclick = () => document.getElementById('company-header').value = h;
     div.appendChild(btn);
   });
 }
 
-// 全局最少订单DP，先过滤双重条件，再DP
+// ---- v6.18 computing code unchanged ----
 function dpGlobalMinCount(orders, targetCents, maxSingleCents, maxSame) {
   let cand = orders.filter(o => Math.round(o.amount*100) <= maxSingleCents);
-  const freq = {}, allowed=[];
-  cand.forEach(o=>{ const k=Math.round(o.amount*100); freq[k]=(freq[k]||0)+1; if(freq[k]<=maxSame) allowed.push(o); });
-  cand=allowed;
-  const dpCnt=Array(targetCents+1).fill(Infinity), prev=Array(targetCents+1).fill(-1), prevIdx=Array(targetCents+1).fill(-1);
-  dpCnt[0]=0;
-  for(let i=0;i<cand.length;i++){ const c=Math.round(cand[i].amount*100);
-    for(let s=targetCents;s>=c;s--){ if(dpCnt[s-c]+1<dpCnt[s]){ dpCnt[s]=dpCnt[s-c]+1; prev[s]=s-c; prevIdx[s]=i; } } }
-  if(!isFinite(dpCnt[targetCents])) return null;
-  const subset=[]; let cur=targetCents;
-  while(cur>0){ subset.push(cand[prevIdx[cur]]); cur=prev[cur]; }
+  const freq = {}, allowed = [];
+  cand.forEach(o => { const k=Math.round(o.amount*100); freq[k]=(freq[k]||0)+1; if(freq[k]<=maxSame) allowed.push(o); });
+  cand = allowed;
+  const dpCnt = Array(targetCents+1).fill(Infinity);
+  const prev = Array(targetCents+1).fill(-1), prevIdx = Array(targetCents+1).fill(-1);
+  dpCnt[0] = 0;
+  for (let i = 0; i < cand.length; i++) {
+    const c = Math.round(cand[i].amount*100);
+    for (let s = targetCents; s >= c; s--) {
+      if (dpCnt[s-c] + 1 < dpCnt[s]) {
+        dpCnt[s] = dpCnt[s-c] + 1;
+        prev[s] = s - c; prevIdx[s] = i;
+      }
+    }
+  }
+  if (!isFinite(dpCnt[targetCents])) return null;
+  const subset = []; let cur = targetCents;
+  while (cur > 0) {
+    subset.push(cand[prevIdx[cur]]);
+    cur = prev[cur];
+  }
   return subset;
 }
-
-// 局部DP for diverse
 function dpBest(orders, limitCents) {
-  const dpSum=Array(limitCents+1).fill(-1), dpCnt=Array(limitCents+1).fill(-Infinity);
-  const prev=Array(limitCents+1).fill(-1), prevIdx=Array(limitCents+1).fill(-1);
-  dpSum[0]=0; dpCnt[0]=0;
-  for(let i=0;i<orders.length;i++){ const c=Math.round(orders[i].amount*100);
-    for(let s=limitCents;s>=c;s--){ if(dpSum[s-c]>=0){ const newSum=dpSum[s-c]+c, newCnt=dpCnt[s-c]+1;
-      if(newCnt>dpCnt[s]||(newCnt===dpCnt[s]&&newSum>dpSum[s])){ dpSum[s]=newSum; dpCnt[s]=newCnt; prev[s]=s-c; prevIdx[s]=i; } } } }
-  let bestS=-1,bestCnt=-Infinity,bestSum=-1;
-  for(let s=1;s<=limitCents;s++){ if(dpSum[s]>=0&&(dpCnt[s]>bestCnt||(dpCnt[s]===bestCnt&&dpSum[s]>bestSum))){ bestCnt=dpCnt[s]; bestSum=dpSum[s]; bestS=s; }}
-  if(bestS<0) return null;
+  const dpSum = Array(limitCents+1).fill(-1), dpCnt = Array(limitCents+1).fill(-Infinity);
+  const prev = Array(limitCents+1).fill(-1), prevIdx = Array(limitCents+1).fill(-1);
+  dpSum[0] = 0; dpCnt[0] = 0;
+  for (let i = 0; i < orders.length; i++) { 
+    const c = Math.round(orders[i].amount*100);
+    for (let s = limitCents; s >= c; s--) { 
+      if (dpSum[s-c] >= 0) { 
+        const newSum = dpSum[s-c] + c, newCnt = dpCnt[s-c] + 1;
+        if (newCnt > dpCnt[s] || (newCnt === dpCnt[s] && newSum > dpSum[s])) { 
+          dpSum[s] = newSum; dpCnt[s] = newCnt; prev[s] = s - c; prevIdx[s] = i;
+        } 
+      } 
+    } 
+  }
+  let bestS=-1, bestCnt=-Infinity, bestSum=-1;
+  for (let s=1; s<=limitCents; s++) {
+    if (dpSum[s]>=0 && (dpCnt[s]>bestCnt || (dpCnt[s]===bestCnt && dpSum[s]>bestSum))) {
+      bestCnt = dpCnt[s]; bestSum = dpSum[s]; bestS = s;
+    }
+  }
+  if (bestS<0) return null;
   const subset=[]; let cur=bestS;
-  while(cur>0){ subset.push(orders[prevIdx[cur]]); cur=prev[cur]; }
+  while(cur>0) {
+    subset.push(orders[prevIdx[cur]]); cur=prev[cur];
+  }
   return subset;
 }
-
-// 分批预览
-function previewInvoices(target,maxSingle,maxSame,logic){
-  const tgtC=Math.round(target*100), sC=Math.round(maxSingle*100);
-  if(logic==='few'){
-    const subset = dpGlobalMinCount(inventory,tgtC,sC,maxSame);
-    if(!subset) return null;
-    subset.sort((a,b)=>b.amount-a.amount);
+function previewInvoices(target, maxSingle, maxSame, logic) {
+  const tgtC = Math.round(target*100), singleC = Math.round(maxSingle*100);
+  if (logic==='few') {
+    const subset = dpGlobalMinCount(inventory, tgtC, singleC, maxSame);
+    if (!subset) return null;
+    subset.sort((a,b)=>b.amount - a.amount);
     const bins=[];
     subset.forEach(o=>{ let placed=false; for(let bin of bins){ const sum=bin.reduce((s,x)=>s+x.amount,0);
-      if(sum+o.amount<=maxSingle){ bin.push(o); placed=true; break; }} if(!placed) bins.push([o]); });
+      if(sum+o.amount<=maxSingle){ bin.push(o); placed=true; break; } } if(!placed) bins.push([o]); });
     return bins.map(bin=>({orders:bin,sum:bin.reduce((s,x)=>s+x.amount,0)}));
   } else {
-    let rem=target,temp=inventory.slice(),invoices=[];
+    let rem=target, temp=inventory.slice(), invoices=[];
     temp.sort((a,b)=>a.amount-b.amount);
     while(rem>0){
       const limitC=Math.round(Math.min(rem,maxSingle)*100);
@@ -576,47 +604,47 @@ function previewInvoices(target,maxSingle,maxSame,logic){
   }
 }
 
-// 渲染
-function renderResult(list,header){
+// 渲染结果
+function renderResult(list, header) {
   const lines=[];
-  list.forEach((inv,i)=>{ lines.push('发票'+(i+1)+'：'+inv.sum.toFixed(2)+(inv.orders.length>1?'（相关订单合并）':''));
-    inv.orders.forEach(o=>lines.push('订单号：'+o.order+'，金额：'+o.amount.toFixed(2))); lines.push(''); });
-  if(header){header.split('\n').forEach(l=>lines.push(l));lines.push('');}
+  list.forEach((inv,i)=>{
+    lines.push('发票'+(i+1)+'：'+inv.sum.toFixed(2)+(inv.orders.length>1?'（相关订单合并）':''));
+    inv.orders.forEach(o=>lines.push('订单号：'+o.order+'，金额：'+o.amount.toFixed(2)));
+    lines.push('');
+  });
+  if (header) { lines.push(header); lines.push(''); }
   lines.push('不需要备注','568881753@qq.com');
-  document.getElementById('result-output').value=lines.join('\n');
+  document.getElementById('result-output').value = lines.join('\n');
 }
 
-function updateDeleteRecords(){
-  const c = document.getElementById('record-list'); c.innerHTML = '';
-  deleteRecords.forEach((lst,i) => {
-    const d = document.createElement('div'); d.className = 'record-item';
-    let html = '批次' + (i+1) + '：共' + lst.length + '张发票<br>';
-    lst.forEach((inv,j) => {
-      html += '发票' + (j+1) + '：' + inv.sum.toFixed(2) + (inv.orders.length>1?'（相关订单合并）':'') + '<br>';
-      inv.orders.forEach(o => html += '· ' + o.order + ' ¥' + o.amount.toFixed(2) + '<br>');
+// 更新删除记录并增加恢复按钮
+function updateDeleteRecords() {
+  const c = document.getElementById('record-list'); c.innerHTML='';
+  deleteRecords.forEach((lst,idx)=>{
+    const d=document.createElement('div'); d.className='record-item';
+    let html='批次'+(idx+1)+'：共'+lst.length+'张发票<br>';
+    lst.forEach((inv,j)=>{
+      html+='发票'+(j+1)+'：'+inv.sum.toFixed(2)+(inv.orders.length>1?'（相关订单合并）':'')+'<br>';
+      inv.orders.forEach(o=>html+='· '+o.order+' ¥'+o.amount.toFixed(2)+'<br>');
     });
     d.innerHTML = html;
     const btn = document.createElement('button');
     btn.textContent = '恢复';
     btn.onclick = () => {
-      const rec = deleteRecords.splice(i,1)[0];
-      rec.forEach(inv => inv.orders.forEach(o => {
-        if (!inventory.find(x=>x.order===o.order&&x.amount===o.amount)) {
-          inventory.push(o);
-        }
-      }));
+      const rec = deleteRecords.splice(idx,1)[0];
+      rec.forEach(inv=>inv.orders.forEach(o=>inventory.push(o)));
       updateDeleteRecords();
     };
     d.appendChild(btn);
     c.appendChild(d);
   });
-});
-    d.innerHTML=html; c.appendChild(d);
-  });
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
-  document.getElementById('combine-btn').onclick=(function(){
+  renderHeaderHistory();
+  updateDeleteRecords();
+
+  document.getElementById('combine-btn').onclick=()=>{
     const tgt=parseFloat(document.getElementById('target-input').value);
     if(isNaN(tgt)||tgt<=0){alert('请输入有效目标金额');return;}
     const ms=document.getElementById('max-single').value.trim();
@@ -625,12 +653,14 @@ document.addEventListener('DOMContentLoaded',()=>{
     const maxSame=msc?parseInt(msc):Infinity;
     const logic=document.getElementById('logic-select').value;
     const header=document.getElementById('company-header').value.trim();
+    saveHeaderHistory(header);
+    renderHeaderHistory();
     const invs=previewInvoices(tgt,maxSingle,maxSame,logic);
     const out=document.getElementById('result-output');
     if(!invs){out.value='无法组合出满足条件的金额';return;}
-    lastInvoices=invs;renderResult(invs,header);
+    lastInvoices=invs; renderResult(invs,header);
     document.getElementById('confirm-delete-btn').style.display='block';
-  });
+  };
   document.getElementById('copy-btn').onclick=()=>navigator.clipboard.writeText(document.getElementById('result-output').value).then(()=>alert('已复制结果'));
   document.getElementById('confirm-delete-btn').onclick=()=>{
     if(!lastInvoices)return;
@@ -643,7 +673,6 @@ document.addEventListener('DOMContentLoaded',()=>{
     updateDeleteRecords();
     document.getElementById('confirm-delete-btn').style.display='none';
   };
-  updateDeleteRecords();
 });
 </script>
 </body>
