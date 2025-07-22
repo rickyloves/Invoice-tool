@@ -30,6 +30,7 @@
   <textarea id="company-header" rows="2" placeholder="行1：公司名称
 行2：统一社会信用代码"></textarea>
   <div id="header-history"></div>
+  <div id="header-history"></div>
 
   <button id="combine-btn">一键组合</button>
   <button id="copy-btn">复制结果</button>
@@ -42,6 +43,7 @@
   <div id="record-list"></div>
 
 <script>
+
 
 // Header history via localStorage
 function loadHeaderHistory() {
@@ -591,12 +593,29 @@ function renderResult(list,header){
   document.getElementById('result-output').value=lines.join('\n');
 }
 
+
 function updateDeleteRecords(){
   const c=document.getElementById('record-list');c.innerHTML='';
-  deleteRecords.forEach((lst,i)=>{ const d=document.createElement('div');d.className='record-item';
+  deleteRecords.forEach((lst,i)=>{
+    const d=document.createElement('div');d.className='record-item';
     let html='批次'+(i+1)+'：共'+lst.length+'张发票<br>';
-    lst.forEach((inv,j)=>{ html+='发票'+(j+1)+'：'+inv.sum.toFixed(2)+(inv.orders.length>1?'（相关订单合并）':'')+'<br>';
-      inv.orders.forEach(o=>html+='· '+o.order+' ¥'+o.amount.toFixed(2)+'<br>'); });
+    lst.forEach((inv,j)=>{
+      html+='发票'+(j+1)+'：'+inv.sum.toFixed(2)+(inv.orders.length>1?'（相关订单合并）':'')+'<br>';
+      inv.orders.forEach(o=>html+='· '+o.order+' ¥'+o.amount.toFixed(2)+'<br>');
+    });
+    d.innerHTML=html;
+    const btnRestore=document.createElement('button');
+    btnRestore.textContent='恢复';
+    btnRestore.onclick=()=>{
+      const rec=deleteRecords.splice(i,1)[0];
+      rec.forEach(inv=>inv.orders.forEach(o=>inventory.push(o)));
+      updateDeleteRecords();
+    };
+    d.appendChild(btnRestore);
+    c.appendChild(d);
+  });
+}
+);
     d.innerHTML=html; c.appendChild(d);
   });
 }
