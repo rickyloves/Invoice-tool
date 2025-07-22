@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>发票组合计算器 V3.6</title>
+<title>发票组合计算器 V3.7</title>
 <style>
 body { font-family: Arial, sans-serif; margin: 10px; }
 h2 { margin-top: 20px; }
@@ -16,7 +16,7 @@ button { cursor: pointer; background-color: #f0f0f0; border: 1px solid #ccc; }
 </head>
 <body>
 
-<h2>发票组合计算器 V3.6</h2>
+<h2>发票组合计算器 V3.7</h2>
 
 <h2>设置参数</h2>
 <label for="target-input">目标开票金额（元）：</label>
@@ -502,35 +502,50 @@ let inventory = [
 ];
 let deleteRecords = [];
 
-// 回溯算法寻找精确组合
-function findCombination(target, orders, maxSame, maxSingle, useLarge) {
-  const sorted = orders.slice().sort((a,b) => useLarge ? b.amount - a.amount : a.amount - b.amount);
-  let best = null;
-
-  function backtrack(start, subset, sum) {
-    if (Math.abs(sum - target) < 1e-6) {
-      if (!best || subset.length < best.length) {
-        best = subset.slice();
-      }
-      return;
+// 动态规划算法：0-1 背包，基于“分数*100 转整数”
+function findCombinationDP(target, orders, maxSame, maxSingle, useLarge) {
+  // 转为整数（分）
+  const targetCents = Math.round(target * 100);
+  // 过滤单张上限
+  let candidates = orders.filter(o => o.amount * 100 <= maxSingle * 100 || maxSingle === Infinity);
+  // 应用相同金额上限：分组后截断
+  if (maxSame !== Infinity) {
+    const grp = {}, temp = [];
+    for (const o of candidates) {
+      const cents = Math.round(o.amount * 100);
+      grp[cents] = (grp[cents] || 0) + 1;
+      if (grp[cents] <= maxSame) temp.push(o);
     }
-    if (sum > target) return;
-    if (best && subset.length >= best.length) return;
-
-    for (let i = start; i < sorted.length; i++) {
-      const item = sorted[i];
-      if (item.amount > maxSingle) continue;
-      const cntSame = subset.filter(x => x.amount === item.amount).length;
-      if (cntSame >= maxSame) continue;
-
-      subset.push(item);
-      backtrack(i + 1, subset, sum + item.amount);
-      subset.pop();
-    }
+    candidates = temp;
   }
-
-  backtrack(0, [], 0);
-  return best;
+  const n = candidates.length;
+  const dp = new Int32Array(targetCents + 1).fill(-1);
+  const prev = new Int32Array(targetCents + 1).fill(-1);
+  dp[0] = -2;  // 起点标记
+  // 构建 DP
+  for (let i = 0; i < n; i++) {
+    const cents = Math.round(candidates[i].amount * 100);
+    for (let s = targetCents; s >= cents; s--) {
+      if (dp[s] === -1 && dp[s - cents] !== -1) {
+        dp[s] = i;
+        prev[s] = s - cents;
+      }
+    }
+    if (dp[targetCents] !== -1) break;  // 提前结束
+  }
+  if (dp[targetCents] === -1) return null;
+  // 重构结果
+  const result = [];
+  let s = targetCents;
+  while (s > 0) {
+    const idx = dp[s];
+    result.push(candidates[idx]);
+    s = prev[s];
+  }
+  // 如果需要排序
+  if (useLarge) result.sort((a,b)=>b.amount - a.amount);
+  else result.sort((a,b)=>a.amount - b.amount);
+  return result;
 }
 
 // 更新删除记录展示
@@ -554,41 +569,34 @@ function updateRecordList() {
   });
 }
 
-// 一键组合处理
+// 一键组合
 document.getElementById('combine-btn').addEventListener('click', () => {
-  const tgt = parseFloat(document.getElementById('target-input').value.trim());
-  if (isNaN(tgt)) {
-    alert('请输入有效的目标开票金额');
-    return;
-  }
-  const maxSingleValRaw = document.getElementById('max-single').value.trim();
-  const maxSingleVal = maxSingleValRaw ? parseFloat(maxSingleValRaw) : Infinity;
-
+  const tgtVal = document.getElementById('target-input').value.trim();
+  const tgt = parseFloat(tgtVal);
+  if (isNaN(tgt)) { alert('请输入有效的目标开票金额'); return; }
+  // 读取约束
+  const maxSingleRaw = document.getElementById('max-single').value.trim();
+  const maxSingle = maxSingleRaw ? parseFloat(maxSingleRaw) : Infinity;
   const maxSameRaw = document.getElementById('max-same-count').value.trim();
-  const maxSameVal = maxSameRaw ? parseInt(maxSameRaw) : Infinity;
-
+  const maxSame = maxSameRaw ? parseInt(maxSameRaw) : Infinity;
   const logic = document.getElementById('logic-select').value;
   const useLarge = logic === 'large';
-
   const header = document.getElementById('company-header').value.trim();
 
-  const combo = findCombination(tgt, inventory, maxSameVal, maxSingleVal, useLarge);
+  // 调用 DP 组合
+  const combo = findCombinationDP(tgt, inventory, maxSame, maxSingle, useLarge);
   let text = '';
-
   if (combo) {
     text += `发票1：${tgt}\n`;
-    if (combo.length > 1) text += '（相关订单合并）\n';
-    combo.forEach(o => {
-      text += `订单号：${o.order}，金额：${o.amount.toFixed(2)}\n`;
-    });
-    // 移除已用订单并记录
+    if (combo.length>1) text += '（相关订单合并）\n';
+    combo.forEach(o => { text += `订单号：${o.order}，金额：${o.amount.toFixed(2)}\n`; });
+    // 移除已用
     inventory = inventory.filter(o => !combo.includes(o));
     deleteRecords.unshift({target: tgt, orders: combo});
-    if (deleteRecords.length > 20) deleteRecords.pop();
+    if (deleteRecords.length>20) deleteRecords.pop();
   } else {
     text += `发票1：${tgt} —— 无法组合出满足条件的金额\n`;
   }
-
   if (header) text += `\n${header}\n`;
   text += `\n不需要备注\n568881753@qq.com`;
 
@@ -599,15 +607,11 @@ document.getElementById('combine-btn').addEventListener('click', () => {
 // 一键复制
 document.getElementById('copy-btn').addEventListener('click', () => {
   const out = document.getElementById('result-output');
-  navigator.clipboard.writeText(out.value).then(() => {
-    alert('已复制结果');
-  });
+  navigator.clipboard.writeText(out.value).then(() => { alert('已复制结果'); });
 });
 
-// 页面初始化
-document.addEventListener('DOMContentLoaded', () => {
-  updateRecordList();
-});
+// 初始化
+document.addEventListener('DOMContentLoaded', () => { updateRecordList(); });
 </script>
 
 </body>
