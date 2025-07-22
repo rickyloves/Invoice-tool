@@ -597,9 +597,15 @@ function updateDeleteRecords(){
     let html='批次'+(i+1)+'：共'+lst.length+'张发票<br>';
     lst.forEach((inv,j)=>{ html+='发票'+(j+1)+'：'+inv.sum.toFixed(2)+(inv.orders.length>1?'（相关订单合并）':'')+'<br>';
       inv.orders.forEach(o=>html+='· '+o.order+' ¥'+o.amount.toFixed(2)+'<br>'); });
-    d.innerHTML=html; c.appendChild(d);
+    d.innerHTML=html;
+    const btnRestore=document.createElement('button');
+    btnRestore.textContent='恢复';
+    btnRestore.onclick=()=>{ const rec=deleteRecords.splice(i,1)[0]; rec.forEach(inv=>inv.orders.forEach(o=>inventory.push(o))); updateDeleteRecords(); };
+    d.appendChild(btnRestore);
+    c.appendChild(d);
   });
 }
+
 
 document.addEventListener('DOMContentLoaded',()=>{
   renderHeaderHistory();
