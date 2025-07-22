@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>发票组合计算器 V6.18</title>
+  <title>发票组合计算器 V6.19</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 10px; }
     h2 { margin-top: 20px; }
@@ -14,7 +14,7 @@
   </style>
 </head>
 <body>
-  <h2>发票组合计算器 V6.18</h2>
+  <h2>发票组合计算器 V6.19</h2>
 
   <h2>设置参数</h2>
   <label>目标开票金额（元）：</label><input id="target-input" placeholder="如 20000">
@@ -28,6 +28,7 @@
   <label>公司抬头：</label>
   <textarea id="company-header" rows="2" placeholder="行1：公司名称
 行2：统一社会信用代码"></textarea>
+  <div id="header-history"></div>
 
   <button id="combine-btn">一键组合</button>
   <button id="copy-btn">复制结果</button>
@@ -494,6 +495,27 @@ let inventory = [
     {order: '32938414266', amount: 8280.00}
 ];
 let deleteRecords = [], lastInvoices = [];
+// 历史抬头
+function loadHeaderHistory() { return JSON.parse(localStorage.getItem("headerHistory") || "[]"); }
+function saveHeaderHistory(header) {
+  if (!header) return;
+  let hist = loadHeaderHistory();
+  hist = hist.filter(h => h !== header);
+  hist.unshift(header);
+  if (hist.length > 20) hist.pop();
+  localStorage.setItem("headerHistory", JSON.stringify(hist));
+}
+function renderHeaderHistory()
+    updateDeleteRecords(); {
+  const hist = loadHeaderHistory();
+  const div = document.getElementById("header-history");
+  div.innerHTML = ""; hist.forEach(h => {
+    const btn = document.createElement("button");
+    btn.textContent = h;
+    btn.onclick = () => document.getElementById("company-header").value = h;
+    div.appendChild(btn);
+  });
+}
 
 // 全局最少订单DP，先过滤双重条件，再DP
 function dpGlobalMinCount(orders, targetCents, maxSingleCents, maxSame) {
@@ -565,11 +587,30 @@ function renderResult(list,header){
 }
 
 function updateDeleteRecords(){
-  const c=document.getElementById('record-list');c.innerHTML='';
-  deleteRecords.forEach((lst,i)=>{ const d=document.createElement('div');d.className='record-item';
-    let html='批次'+(i+1)+'：共'+lst.length+'张发票<br>';
-    lst.forEach((inv,j)=>{ html+='发票'+(j+1)+'：'+inv.sum.toFixed(2)+(inv.orders.length>1?'（相关订单合并）':'')+'<br>';
-      inv.orders.forEach(o=>html+='· '+o.order+' ¥'+o.amount.toFixed(2)+'<br>'); });
+  const c = document.getElementById('record-list'); c.innerHTML = '';
+  deleteRecords.forEach((lst,i) => {
+    const d = document.createElement('div'); d.className = 'record-item';
+    let html = '批次' + (i+1) + '：共' + lst.length + '张发票<br>';
+    lst.forEach((inv,j) => {
+      html += '发票' + (j+1) + '：' + inv.sum.toFixed(2) + (inv.orders.length>1?'（相关订单合并）':'') + '<br>';
+      inv.orders.forEach(o => html += '· ' + o.order + ' ¥' + o.amount.toFixed(2) + '<br>');
+    });
+    d.innerHTML = html;
+    const btn = document.createElement('button');
+    btn.textContent = '恢复';
+    btn.onclick = () => {
+      const rec = deleteRecords.splice(i,1)[0];
+      rec.forEach(inv => inv.orders.forEach(o => {
+        if (!inventory.find(x=>x.order===o.order&&x.amount===o.amount)) {
+          inventory.push(o);
+        }
+      }));
+      updateDeleteRecords();
+    };
+    d.appendChild(btn);
+    c.appendChild(d);
+  });
+});
     d.innerHTML=html; c.appendChild(d);
   });
 }
