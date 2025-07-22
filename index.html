@@ -491,6 +491,33 @@ let inventory = [
 ];
 let deleteRecords = [], lastInvoices = [];
 
+
+// 全局最小订单子集DP
+function dpGlobalMinCount(orders, targetCents, maxSingleCents) {
+  let cand = orders.filter(o => Math.round(o.amount*100) <= maxSingleCents);
+  const dpCnt = Array(targetCents+1).fill(Infinity);
+  const prev = Array(targetCents+1).fill(-1);
+  const prevIdx = Array(targetCents+1).fill(-1);
+  dpCnt[0] = 0;
+  for (let i = 0; i < cand.length; i++) {
+    const c = Math.round(cand[i].amount*100);
+    for (let s = targetCents; s >= c; s--) {
+      if (dpCnt[s-c] + 1 < dpCnt[s]) {
+        dpCnt[s] = dpCnt[s-c] + 1;
+        prev[s] = s - c;
+        prevIdx[s] = i;
+      }
+    }
+  }
+  if (dpCnt[targetCents] === Infinity) return null;
+  let subset = [], cur = targetCents;
+  while (cur > 0) {
+    const idx = prevIdx[cur];
+    subset.push(cand[idx]);
+    cur = prev[cur];
+  }
+  return subset;
+}
 // DP for best subset: maximize sum, tie-break on count (minimize or maximize orders)
 function dpBest(orders, limitCents, maxSame, minimizeCount) {
   const dpSum = Array(limitCents+1).fill(-1);
