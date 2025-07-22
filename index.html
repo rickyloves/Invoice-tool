@@ -18,7 +18,7 @@
   <p>已加载 450 条订单数据。</p>
 
   <label>
-    目标金额（元，必填）：
+    目标总金额（元，必填）：
     <input type="number" id="targetAmount" step="0.01" />
   </label>
 
@@ -37,7 +37,7 @@
     <button id="exportBtn">导出</button>
   </div>
 
-  <div id="output" placeholder="输出结果在此显示…"></div>
+  <div id="output"></div>
 
   <script>
     // 嵌入的订单数据
@@ -495,15 +495,17 @@
     function toCents(n) { return Math.round(n * 100); }
     function toYuan(c) { return (c / 100).toFixed(2); }
 
+    // 找到最优子集 —— 优先最少订单数，其次最大金额
     function findBestSubset(availOrders, limitCents, usedCountMap, dupLimit) {
       const N = availOrders.length;
-      const amounts = availOrders.map(o => toCents(o.amount));
+      const centsArr = availOrders.map(o => toCents(o.amount));
+      // dpCount[s] = 最少订单数使得正好凑出 s；初始化为 +Inf
       const dpCount = Array(limitCents + 1).fill(Infinity);
       const dpPrevIdx = Array(limitCents + 1).fill(-1);
       const dpFromSum = Array(limitCents + 1).fill(-1);
       dpCount[0] = 0;
       for (let i = 0; i < N; i++) {
-        const a = amounts[i];
+        const a = centsArr[i];
         for (let s = limitCents; s >= a; s--) {
           if (dpCount[s - a] + 1 < dpCount[s]) {
             dpCount[s] = dpCount[s - a] + 1;
@@ -512,22 +514,28 @@
           }
         }
       }
-      let bestSum = -1, bestCount = Infinity;
-      for (let s = limitCents; s >= 0; s--) {
-        if (dpCount[s] < Infinity) {
-          const used = usedCountMap[s] || 0;
-          if (used < dupLimit && (s > bestSum || (s === bestSum && dpCount[s] < bestCount))) {
-            bestSum = s;
-            bestCount = dpCount[s];
-          }
+      // 找到最少订单数
+      let minCount = Infinity;
+      for (let s = 1; s <= limitCents; s++) {
+        if (dpCount[s] < minCount && (usedCountMap[s] || 0) < dupLimit) {
+          minCount = dpCount[s];
+        }
+      }
+      if (minCount === Infinity) return null;
+      // 在最少订单数中，选金额最大的
+      let bestSum = -1;
+      for (let s = 1; s <= limitCents; s++) {
+        if (dpCount[s] === minCount && (usedCountMap[s] || 0) < dupLimit) {
+          if (s > bestSum) bestSum = s;
         }
       }
       if (bestSum <= 0) return null;
+      // 重建路径
       const seq = [];
       let cur = bestSum;
       while (cur > 0) {
-        const i = dpPrevIdx[cur];
-        seq.push(i);
+        const idx = dpPrevIdx[cur];
+        seq.push(idx);
         cur = dpFromSum[cur];
       }
       return { sum: bestSum, orders: seq.map(i => availOrders[i]) };
@@ -536,7 +544,7 @@
     function computeInvoices() {
       const tgt = parseFloat(document.getElementById('targetAmount').value);
       if (isNaN(tgt) || tgt <= 0) {
-        alert('请填写合法的目标金额');
+        alert('请填写合法的目标总金额');
         return null;
       }
       let invLimit = parseFloat(document.getElementById('invoiceLimit').value);
@@ -544,7 +552,7 @@
       let dupLimit = parseInt(document.getElementById('duplicateLimit').value);
       if (isNaN(dupLimit) || dupLimit < 0) dupLimit = Infinity;
       const targetC = toCents(tgt);
-      const limitC = invLimit === Infinity ? Infinity : toCents(invLimit);
+      const limitC = invLimit === Infinity ? targetC : toCents(invLimit);
 
       let rem = targetC;
       let pool = orders.slice();
@@ -555,11 +563,12 @@
         const curLimit = Math.min(limitC, rem);
         const subset = findBestSubset(pool, curLimit, usedCount, dupLimit);
         if (!subset) {
-          return { error: '无法组合出满足条件的金额，请检查参数设置。' };
+          return { error: '无法组合出满足条件的金额，请检查参数设置或库存数据。' };
         }
         groups.push(subset);
         usedCount[subset.sum] = (usedCount[subset.sum] || 0) + 1;
         rem -= subset.sum;
+        // 移除已用订单
         const usedIds = new Set(subset.orders.map(o => o.id));
         pool = pool.filter(o => !usedIds.has(o.id));
       }
@@ -579,11 +588,9 @@
       res.groups.forEach((g, i) => {
         const y = toYuan(g.sum);
         const more = g.orders.length > 1 ? '（相关订单合并）' : '';
-        txt += `发票${i + 1}：${y}${more}
-`;
+        txt += `发票${i + 1}：${y}${more}\n`;
         g.orders.forEach(o => {
-          txt += `订单号：${o.id}，金额：${o.amount.toFixed(2)}
-`;
+          txt += `订单号：${o.id}，金额：${o.amount.toFixed(2)}\n`;
         });
         txt += '\n';
       });
