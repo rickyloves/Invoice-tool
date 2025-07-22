@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>发票组合计算器 V6.26</title>
+  <title>发票组合计算器 V6.27</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 10px; }
     h2 { margin-top: 20px; }
@@ -15,7 +15,7 @@
 </style>
 </head>
 <body>
-  <h2>发票组合计算器 V6.26</h2>
+  <h2>发票组合计算器 V6.27</h2>
 
   <h2>设置参数</h2>
   <label>目标开票金额（元）：</label><input id="target-input" placeholder="如 20000">
@@ -67,9 +67,11 @@ function renderHeaderHistory() {
   });
 
 // 保存当前库存到 localStorage
-function saveInventory(){localStorage.setItem('invoiceInventory',JSON.stringify(inventory));}
+function saveInventory() {
+  localStorage.setItem('invoiceInventory', JSON.stringify(inventory));
+}
 
-
+}
 
 // 预加载库存
 let inventory = [
@@ -531,7 +533,12 @@ if (savedInv) {
 } else {
   localStorage.setItem('invoiceInventory', JSON.stringify(inventory));
 }
-, allowed=[];
+let deleteRecords = [], lastInvoices = [];
+
+// 全局最少订单DP，先过滤双重条件，再DP
+function dpGlobalMinCount(orders, targetCents, maxSingleCents, maxSame) {
+  let cand = orders.filter(o => Math.round(o.amount*100) <= maxSingleCents);
+  const freq = {}, allowed=[];
   cand.forEach(o=>{ const k=Math.round(o.amount*100); freq[k]=(freq[k]||0)+1; if(freq[k]<=maxSame) allowed.push(o); });
   cand=allowed;
   const dpCnt=Array(targetCents+1).fill(Infinity), prev=Array(targetCents+1).fill(-1), prevIdx=Array(targetCents+1).fill(-1);
@@ -634,12 +641,11 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('confirm-delete-btn').onclick=()=>{
     if(!lastInvoices)return;
     deleteRecords.unshift(lastInvoices);
-    saveInventory();
-    saveInventory();
     if(deleteRecords.length>20)deleteRecords.pop();
     lastInvoices.forEach(inv=>inv.orders.forEach(o=>{
       const i=inventory.findIndex(x=>x.order===o.order&&x.amount===o.amount);
       if(i>-1)inventory.splice(i,1);
+    saveInventory();
     }));
     updateDeleteRecords();
     document.getElementById('confirm-delete-btn').style.display='none';
