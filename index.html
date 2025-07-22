@@ -615,6 +615,13 @@ function updateRecordList() {
     });
   });
 }
+
+// 页面加载时初始化库存和删除记录展示
+document.addEventListener('DOMContentLoaded', function() {
+  updateInventoryView();
+  updateRecordList();
+});
+
 </script>
 
 </body>
