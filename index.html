@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>发票组合计算器 V6.15</title>
+  <title>发票组合计算器 V6.16</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 10px; }
     h2 { margin-top: 20px; }
@@ -15,7 +15,7 @@
   </style>
 </head>
 <body>
-  <h2>发票组合计算器 V6.15</h2>
+  <h2>发票组合计算器 V6.16</h2>
   <h2>设置参数</h2>
   <label>目标开票金额（元）：</label>
   <input id="target-input" placeholder="如 20000">
@@ -561,84 +561,36 @@ function dpMaxCount(orders, limitCents) {
   return subset;
 }
 
-
-// 最少订单子集 DP，仅针对单张发票
-function dpFewSubset(orders, limitCents, maxSame, freq) {
-  const n = orders.length;
-  const dpCnt = Array(limitCents+1).fill(Infinity);
-  const prev = Array(limitCents+1).fill(-1), prevIdx = Array(limitCents+1).fill(-1);
-  dpCnt[0] = 0;
-  for (let i = 0; i < n; i++) {
-    const c = Math.round(orders[i].amount*100);
-    for (let s = limitCents; s >= c; s--) {
-      if (dpCnt[s-c] + 1 < dpCnt[s]) {
-        dpCnt[s] = dpCnt[s-c] + 1;
-        prev[s] = s - c;
-        prevIdx[s] = i;
-      }
-    }
-  }
-  // 寻找最优 s: dpCnt[s] < inf, freq[s] < maxSame, 优先 dpCnt 最小，再 s 最大
-  let bestCnt = Infinity, bestS = -1;
-  for (let s = 1; s <= limitCents; s++) {
-    if (dpCnt[s] < Infinity) {
-      const count = freq[s] || 0;
-      if (count < maxSame) {
-        if (dpCnt[s] < bestCnt || (dpCnt[s] === bestCnt && s > bestS)) {
-          bestCnt = dpCnt[s];
-          bestS = s;
-        }
-      }
-    }
-  }
-  if (bestS < 0) return null;
-  // 回溯出子集
-  const subset = [];
-  let cur = bestS;
-  while (cur > 0) {
-    const idx = prevIdx[cur];
-    subset.push(orders[idx]);
-    cur = prev[cur];
-  }
-  return { orders: subset, sum: bestS/100 };
-}
-
 // 分批预览
 function previewInvoices(target, maxSingle, maxSame, logic) {
+  const tgtC = Math.round(target*100);
+  const singleC = Math.round(maxSingle*100);
   if (logic === 'few') {
-    let rem = target;
-    let temp = inventory.slice();
-    const invoices = [];
-    const freq = {}; // 记录每个发票金额出现次数，以分辨是否超过 maxSame
-    while (rem > 0) {
-      const limitC = Math.round(Math.min(rem, maxSingle) * 100);
-      const inv = dpFewSubset(temp, limitC, maxSame, freq);
-      if (!inv) return null;
-      // 更新 freq
-      const cents = Math.round(inv.sum * 100);
-      freq[cents] = (freq[cents] || 0) + 1;
-      invoices.push(inv);
-      // 移除使用订单
-      inv.orders.forEach(o => {
-        const i = temp.findIndex(x => x.order === o.order && x.amount === o.amount);
-        if (i > -1) temp.splice(i, 1);
-      });
-      rem = +(rem - inv.sum).toFixed(2);
-    }
-    return invoices;
+    const subset = dpGlobalMinCount(inventory, tgtC, singleC);
+    if (!subset) return null;
+    subset.sort((a,b)=>b.amount-a.amount);
+    const bins = [];
+    subset.forEach(o => {
+      let placed = false;
+      for (let bin of bins) {
+        const sum = bin.reduce((s,x)=>s+x.amount,0);
+        if (sum + o.amount <= maxSingle) { bin.push(o); placed = true; break; }
+      }
+      if (!placed) bins.push([o]);
+    });
+    return bins.map(bin=>({orders:bin,sum:bin.reduce((s,x)=>s+x.amount,0)}));
   } else {
-    // 保持原有“多笔分散”逻辑
     let rem = target, temp = inventory.slice(), invoices = [];
     temp.sort((a,b)=>a.amount - b.amount);
-    while (rem>0) {
+    while (rem > 0) {
       const limitC = Math.round(Math.min(rem, maxSingle)*100);
-      const orders = dpBest(temp, limitC);
-      if (!orders) return null;
-      const sum = +orders.reduce((s,x)=>s+x.amount,0).toFixed(2);
-      invoices.push({orders, sum});
-      orders.forEach(o=>{
-        const i=temp.findIndex(x=>x.order===o.order&&x.amount===o.amount);
-        if (i>-1) temp.splice(i,1);
+      const subset = dpMaxCount(temp, limitC);
+      if (!subset) return null;
+      const sum = +subset.reduce((s,x)=>s+x.amount,0).toFixed(2);
+      invoices.push({orders:subset, sum});
+      subset.forEach(o=>{
+        const idx = temp.findIndex(x=>x.order===o.order&&x.amount===o.amount);
+        if (idx>-1) temp.splice(idx,1);
       });
       rem = +(rem - sum).toFixed(2);
     }
