@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>发票组合计算器 V6.42</title>
+  <title>发票组合计算器 V6.44</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
     body { font-family: Arial, sans-serif; margin:10px; }
@@ -16,16 +16,16 @@
 </head>
 <body>
 
-  <h2>发票组合计算器 V6.42</h2>
+  <h2>发票组合计算器 V6.44</h2>
 
   <label>目标开票金额（元）：</label>
   <input id="target-input" placeholder="如 20000">
 
-  <label>单张发票金额上限：</label>
-  <input id="max-single" type="number">
+  <label>单张发票金额范围（格式 min-max，留空表示不限）：</label>
+  <input id="single-range" placeholder="例如 1000-5000 或 -5000 或 1000-">
 
   <label>相同金额发票张数上限：</label>
-  <input id="max-same-count" type="number">
+  <input id="max-same-count" type="number" placeholder="留空表示不限">
 
   <label>公司抬头：</label>
   <textarea id="company-header" rows="2" placeholder="行1：公司名称
@@ -113,11 +113,21 @@ function renderResult(list,header){
   document.getElementById('result-output').value = lines.join('\n');
 }
 
+// ====== 解析金额范围 ======
+function parseRange(str, target){
+  if(!str) return {min:0, max: target};
+  const [a,b] = str.split('-').map(s=>s.trim());
+  const min = a !== '' ? parseFloat(a) : 0;
+  const max = b !== '' ? parseFloat(b) : target;
+  return {min, max};
+}
+
 // ====== 全局最少订单 DP ======
-function fewInvoices(target, maxSingle, maxSame){
+function fewInvoices(target, minSingle, maxSingle, maxSame){
   const dp = Array(target+1).fill(null);
   dp[0] = {count:0, orders:[]};
-  const usable = inventory.filter(o=>o.amount<=maxSingle)
+  const usable = inventory
+    .filter(o=>o.amount>=minSingle && o.amount<=maxSingle)
     .filter((o,i,arr)=>arr.filter(x=>x.amount===o.amount).length<=maxSame);
   usable.forEach((o, idx)=>{
     for(let s=target; s>=o.amount; s--){
@@ -145,13 +155,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('combine-btn').onclick = ()=>{
     const tgt = parseFloat(document.getElementById('target-input').value);
     if(!tgt) return alert('请输入目标金额');
-    const ms = parseFloat(document.getElementById('max-single').value) || tgt;
+
+    const rangeStr = document.getElementById('single-range').value.trim();
+    const {min:minS, max:maxS} = parseRange(rangeStr, tgt);
+    if(minS > maxS) return alert('范围格式不正确：下限不能大于上限');
+
     const msc = parseInt(document.getElementById('max-same-count').value) || Infinity;
     const header = document.getElementById('company-header').value.trim();
-    saveHeaderHistory(header);
-    renderHeaderHistory();
+    saveHeaderHistory(header); renderHeaderHistory();
 
-    const invs = fewInvoices(tgt, ms, msc);
+    const invs = fewInvoices(tgt, minS, maxS, msc);
     if(!invs) return alert('无法组合出满足条件的金额');
     lastInv = invs;
     renderResult(invs, header);
