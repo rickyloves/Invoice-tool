@@ -2,38 +2,45 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>发票组合计算器 V6.62</title>
+  <title>发票组合计算器 V7.0</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
     /* 基础重置 */
-    * { box-sizing:border-box; margin:0; padding:0; }
-    body { background:#f5f5f5; font-family:Arial,sans-serif; color:#333; padding-bottom:80px; }
-    .container { max-width:480px; margin:20px auto; padding:0 10px; }
-    h2 { text-align:center; margin-bottom:12px; font-size:1.6rem; }
-    .card { background:#fff; border-radius:6px; padding:16px; margin-bottom:12px; box-shadow:0 2px 5px rgba(0,0,0,0.05); }
-    label { display:block; margin-top:12px; font-weight:bold; }
-    input, textarea { width:100%; padding:8px; margin-top:6px; border:1px solid #ccc; border-radius:4px; }
-    textarea { resize:vertical; }
-    .flex { display:flex; gap:8px; margin-top:6px; }
-    .flex input { flex:1; }
-    .flex span { line-height:32px; }
-    .two-cols { display:flex; gap:8px; margin-top:6px; }
-    .two-cols > div { flex:1; }
+    * { box-sizing:border-box; margin:0; padding:0 }
+    body { background:#f5f5f5; font-family:Arial,sans-serif; color:#333; padding-bottom:80px }
+    .container { max-width:480px; margin:20px auto; padding:0 10px }
+    h2 { text-align:center; margin-bottom:12px; font-size:1.6rem }
+    .card { background:#fff; border-radius:6px; padding:16px; margin-bottom:12px; box-shadow:0 2px 5px rgba(0,0,0,0.05) }
+    label { display:block; margin-top:12px; font-weight:bold }
+    input, textarea { width:100%; padding:8px; margin-top:6px; border:1px solid #ccc; border-radius:4px }
+    textarea { resize:vertical }
+    .flex { display:flex; gap:8px; margin-top:6px }
+    .flex input { flex:1 }
+    .flex span { line-height:32px }
+    .two-cols { display:flex; gap:8px; margin-top:6px }
+    .two-cols > div { flex:1 }
 
-    /* 历史抬头 */
-    #header-history { margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; }
-    .hdr-item { display:flex; align-items:center; background:#e0e0e0; border-radius:4px; }
+    /* 历史抬头 --- V6.61 配色 */
+    #header-history { margin-top:8px; display:flex; flex-wrap:wrap; gap:6px }
+    .hdr-item {
+      background:#007bff; color:#fff;
+      border-radius:4px; overflow:hidden;
+      display:flex; align-items:center;
+    }
     .hdr-item button.txt {
-      background:transparent; border:none; padding:6px 10px; font-size:0.9rem; cursor:pointer;
+      background:transparent; border:none;
+      padding:6px 10px; font-size:0.9rem;
+      color:#fff; cursor:pointer;
     }
     .hdr-item button.del {
-      background:transparent; border:none; padding:0 8px; font-size:1rem; color:#888; cursor:pointer;
-      transition:color .2s;
+      background:rgba(255,255,255,0.3); border:none;
+      padding:0 8px; font-size:1rem; color:#fff; cursor:pointer;
+      transition:background .2s;
     }
-    .hdr-item button.del:hover { color:#f00; }
+    .hdr-item button.del:hover { background:rgba(255,255,255,0.5) }
 
     /* 手风琴 */
-    .accordion { border-radius:6px; overflow:hidden; }
+    .accordion { border-radius:6px; overflow:hidden }
     .accordion-header {
       background:#fff; padding:12px 16px; cursor:pointer;
       font-weight:bold; box-shadow:0 2px 5px rgba(0,0,0,0.05);
@@ -46,37 +53,38 @@
       border-top:8px solid #666;
       transition:transform .3s;
     }
-    .accordion-header.open .arrow {
-      transform:rotate(180deg);
-    }
-    .accordion-content { display:none; background:#fff; padding:12px 16px; box-shadow:0 2px 5px rgba(0,0,0,0.05); }
+    .accordion-header.open .arrow { transform:rotate(180deg) }
+    .accordion-content { display:none; background:#fff; padding:12px 16px; box-shadow:0 2px 5px rgba(0,0,0,0.05) }
 
-    .record-item { border-top:1px solid #eee; padding:8px 0; }
-    .record-item:first-child { border-top:none; }
+    .record-item { border-top:1px solid #eee; padding:8px 0 }
+    .record-item:first-child { border-top:none }
+    .record-item .orders {
+      margin-top:8px; line-height:1.4;
+    }
     .record-item .btn-recover {
       display:block; margin:8px auto 0; padding:6px 12px;
       background:#007bff; color:#fff; border:none; border-radius:4px;
       font-size:0.9rem; cursor:pointer; transition:background .2s;
     }
-    .record-item .btn-recover:hover { background:#0056b3; }
+    .record-item .btn-recover:hover { background:#0056b3 }
 
     /* 结果区 */
-    #result-output { white-space:pre-wrap; max-height:200px; overflow:auto; font-family:monospace; }
+    #result-output { white-space:pre-wrap; max-height:200px; overflow:auto; font-family:monospace }
 
     /* 底部固定 */
-    .footer { position:fixed; bottom:0; left:0; right:0; background:#fff; padding:8px; box-shadow:0 -2px 5px rgba(0,0,0,0.05); display:flex; gap:8px; }
+    .footer { position:fixed; bottom:0; left:0; right:0; background:#fff; padding:8px; box-shadow:0 -2px 5px rgba(0,0,0,0.05); display:flex; gap:8px }
     .footer button {
-      flex:1; padding:12px 0; font-size:1rem; border:none; border-radius:4px; cursor:pointer;
+      flex:1; padding:12px 0; font-size:1rem; border:none; border-radius:4px; cursor:pointer
     }
-    .primary { background:#007bff; color:#fff; }
-    .secondary { background:#6c757d; color:#fff; }
-    .danger { background:#dc3545; color:#fff; }
-    .hidden { display:none; }
+    .primary { background:#007bff; color:#fff }
+    .secondary { background:#6c757d; color:#fff }
+    .danger { background:#dc3545; color:#fff }
+    .hidden { display:none }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>发票组合计算器 V6.62</h2>
+    <h2>发票组合计算器 V7.0</h2>
 
     <!-- 参数卡片 -->
     <div class="card">
@@ -131,7 +139,6 @@
   </div>
 
 <script>
-  // 默认库存，替换为实际数据
   const defaultInventory = [
     {order:'23910608992',amount:1600},
     {order:'17938227424',amount:800},
@@ -140,34 +147,32 @@
   let inventory = JSON.parse(localStorage.getItem('invoiceInventory')) || defaultInventory.slice();
   let deleteRecords = JSON.parse(localStorage.getItem('deleteRecords')) || [];
 
-  // 存储及历史抬头
   const saveInventory = ()=>localStorage.setItem('invoiceInventory', JSON.stringify(inventory));
   const saveDeleteRecords = ()=>localStorage.setItem('deleteRecords', JSON.stringify(deleteRecords));
   const loadHeaderHistory = ()=>JSON.parse(localStorage.getItem('headerHistory')||'[]');
   const saveHeaderHistory = h=>{
     if(!h) return;
-    let hist=loadHeaderHistory().filter(x=>x!==h);
+    let hist = loadHeaderHistory().filter(x=>x!==h);
     hist.unshift(h);
-    if(hist.length>10) hist.pop();  // 保留 10 条
+    if(hist.length>10) hist.pop();
     localStorage.setItem('headerHistory', JSON.stringify(hist));
   };
 
-  // 渲染
   function renderHeaderHistory(){
-    const div=document.getElementById('header-history');
-    div.innerHTML='';
+    const div = document.getElementById('header-history');
+    div.innerHTML = '';
     loadHeaderHistory().forEach((h,i)=>{
-      const wrap=document.createElement('div');
-      wrap.className='hdr-item';
-      const txtBtn=document.createElement('button');
-      txtBtn.textContent=h;
-      txtBtn.className='txt';
-      txtBtn.onclick=()=>document.getElementById('company-header').value=h;
-      const delBtn=document.createElement('button');
-      delBtn.textContent='✕';
-      delBtn.className='del';
-      delBtn.onclick=()=>{
-        let hist=loadHeaderHistory().filter((x,idx)=>idx!==i);
+      const wrap = document.createElement('div');
+      wrap.className = 'hdr-item';
+      const txtBtn = document.createElement('button');
+      txtBtn.textContent = h;
+      txtBtn.className = 'txt';
+      txtBtn.onclick = ()=>document.getElementById('company-header').value = h;
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '✕';
+      delBtn.className = 'del';
+      delBtn.onclick = ()=>{
+        let hist = loadHeaderHistory().filter((_,idx)=>idx!==i);
         localStorage.setItem('headerHistory', JSON.stringify(hist));
         renderHeaderHistory();
       };
@@ -178,22 +183,26 @@
   }
 
   function renderDeleteRecords(){
-    const list=document.getElementById('record-list');
-    list.innerHTML='';
+    const list = document.getElementById('record-list');
+    list.innerHTML = '';
     deleteRecords.forEach((batch,i)=>{
-      const item=document.createElement('div');
-      item.className='record-item';
-      let html=`批次 ${i+1}，共 ${batch.length} 张发票<br>`;
-      batch.forEach((inv,j)=>{
-        html+=`发票${j+1}：${inv.sum}元${inv.orders.length>1?'（相关订单合并）':''}<br>`;
-        inv.orders.forEach(o=> html+=`&nbsp;&nbsp;订单号：${o.order}，金额：${o.amount}元<br>`);
+      const item = document.createElement('div');
+      item.className = 'record-item';
+      let html = `批次 ${i+1}：共 ${batch.length} 张订单<br>`;
+      html += '<div class="orders">';
+      // 直接把所有订单拉平列出
+      batch.forEach(inv=>{
+        inv.orders.forEach(o=>{
+          html += `订单号：${o.order}，金额：${o.amount}元<br>`;
+        });
       });
-      item.innerHTML=html;
-      const btn=document.createElement('button');
-      btn.textContent='恢复';
-      btn.className='btn-recover';
-      btn.onclick=()=>{
-        const rec=deleteRecords.splice(i,1)[0];
+      html += '</div>';
+      item.innerHTML = html;
+      const btn = document.createElement('button');
+      btn.textContent = '恢复';
+      btn.className = 'btn-recover';
+      btn.onclick = ()=>{
+        const rec = deleteRecords.splice(i,1)[0];
         rec.forEach(inv=>inv.orders.forEach(o=>inventory.push(o)));
         saveDeleteRecords(); saveInventory(); renderDeleteRecords();
       };
@@ -203,13 +212,13 @@
   }
 
   function subsetMinOrders(target, arr){
-    const dp=Array(target+1).fill(null);
-    dp[0]={cnt:0,picks:[]};
+    const dp = Array(target+1).fill(null);
+    dp[0] = { cnt:0, picks:[] };
     for(let i=0;i<arr.length;i++){
-      const a=arr[i].amount;
-      for(let s=target;s>=a;s--){
-        if(dp[s-a]&&(!dp[s]||dp[s-a].cnt+1<dp[s].cnt)){
-          dp[s]={cnt:dp[s-a].cnt+1,picks:dp[s-a].picks.concat(i)};
+      const a = arr[i].amount;
+      for(let s=target; s>=a; s--){
+        if(dp[s-a] && (!dp[s] || dp[s-a].cnt+1 < dp[s].cnt)){
+          dp[s] = { cnt: dp[s-a].cnt+1, picks: dp[s-a].picks.concat(i) };
         }
       }
     }
@@ -217,32 +226,32 @@
   }
 
   function fewInvoices(target,minS,maxS,maxSame,invoiceCount){
-    const usable=inventory
-      .filter(o=>o.amount>=minS&&o.amount<=maxS)
+    const usable = inventory
+      .filter(o=>o.amount>=minS && o.amount<=maxS)
       .filter(o=> isFinite(maxSame)
         ? inventory.filter(x=>x.amount===o.amount).length<=maxSame
         : true
       );
     if(!usable.length) return null;
-    const memo=new Map();
+    const memo = new Map();
     function dfs(remT,k,avail){
-      const key=`${remT}|${k}|${avail.length}`;
+      const key = `${remT}|${k}|${avail.length}`;
       if(memo.has(key)) return memo.get(key);
       if(k===1){
-        const r=subsetMinOrders(remT,avail);
+        const r = subsetMinOrders(remT,avail);
         if(!r) return null;
-        return [{orders:r.picks.map(i=>avail[i]),sum:remT}];
+        return [{ orders:r.picks.map(i=>avail[i]), sum:remT }];
       }
       for(let i=0;i<avail.length;i++){
-        const r=subsetMinOrders(avail[i].amount,avail.slice(i));
+        const r = subsetMinOrders(avail[i].amount, avail.slice(i));
         if(!r) continue;
-        const pick=r.picks.map(j=>avail[i+j]);
-        const sumPick=pick.reduce((a,o)=>a+o.amount,0);
+        const pick = r.picks.map(j=>avail[i+j]);
+        const sumPick = pick.reduce((a,o)=>a+o.amount,0);
         if(sumPick<minS||sumPick>maxS) continue;
-        const rest=avail.filter(o=>!pick.includes(o));
-        const sub=dfs(remT-sumPick,k-1,rest);
+        const rest = avail.filter(o=>!pick.includes(o));
+        const sub = dfs(remT - sumPick, k-1, rest);
         if(sub){
-          const res=[{orders:pick,sum:sumPick},...sub];
+          const res = [{orders:pick,sum:sumPick}, ...sub];
           memo.set(key,res);
           return res;
         }
@@ -251,44 +260,43 @@
       return null;
     }
     if(!invoiceCount){
-      const r=subsetMinOrders(target,usable);
+      const r = subsetMinOrders(target, usable);
       if(!r) return null;
-      return [{orders:r.picks.map(i=>usable[i]),sum:target}];
+      return [{ orders:r.picks.map(i=>usable[i]), sum:target }];
     }
-    return dfs(target,invoiceCount,usable);
+    return dfs(target, invoiceCount, usable);
   }
 
   document.addEventListener('DOMContentLoaded',()=>{
     renderHeaderHistory();
     renderDeleteRecords();
 
-    // 手风琴切换
-    const hdr=document.querySelector('.accordion-header');
-    const cont=document.querySelector('.accordion-content');
-    hdr.onclick=()=>{
+    const hdr = document.querySelector('.accordion-header');
+    const cont = document.querySelector('.accordion-content');
+    hdr.onclick = ()=>{
       const open = cont.style.display==='block';
       cont.style.display = open ? 'none' : 'block';
       hdr.classList.toggle('open', !open);
     };
 
-    let lastInv=null;
-    document.getElementById('combine-btn').onclick=()=>{
-      const tgt=+document.getElementById('target-input').value;
+    let lastInv = null;
+    document.getElementById('combine-btn').onclick = ()=>{
+      const tgt = +document.getElementById('target-input').value;
       if(!tgt) return alert('请输入目标金额');
-      const minS=+document.getElementById('min-single').value||0;
-      const maxS=+document.getElementById('max-single').value||tgt;
+      const minS = +document.getElementById('min-single').value||0;
+      const maxS = +document.getElementById('max-single').value||tgt;
       if(minS>maxS) return alert('下限不可大于上限');
-      const msc=+document.getElementById('max-same-count').value||Infinity;
-      const ic=+document.getElementById('invoice-count').value||0;
-      const header=document.getElementById('company-header').value.trim();
+      const msc = +document.getElementById('max-same-count').value||Infinity;
+      const ic  = +document.getElementById('invoice-count').value||0;
+      const header = document.getElementById('company-header').value.trim();
       saveHeaderHistory(header);
       renderHeaderHistory();
 
-      const invs=fewInvoices(tgt,minS,maxS,msc,ic);
+      const invs = fewInvoices(tgt,minS,maxS,msc,ic);
       if(!invs) return alert('无法组合出满足条件的金额');
-      lastInv=invs;
-      // 渲染结果
-      const out=[];
+      lastInv = invs;
+
+      const out = [];
       invs.forEach((inv,i)=>{
         out.push(`发票${i+1}：${inv.sum}元${inv.orders.length>1?'（相关订单合并）':''}`);
         inv.orders.forEach(o=> out.push(`订单号：${o.order}，金额：${o.amount}元`));
@@ -296,23 +304,23 @@
       });
       if(header) out.push(header,'');
       out.push('不需要备注','568881753@qq.com');
-      document.getElementById('result-output').textContent=out.join('\n');
+      document.getElementById('result-output').textContent = out.join('\n');
       document.getElementById('confirm-delete-btn').classList.remove('hidden');
     };
 
-    document.getElementById('confirm-delete-btn').onclick=()=>{
+    document.getElementById('confirm-delete-btn').onclick = ()=>{
       if(!lastInv) return;
       deleteRecords.unshift(lastInv);
       if(deleteRecords.length>20) deleteRecords.pop();
       lastInv.forEach(inv=>inv.orders.forEach(o=>{
-        const idx=inventory.findIndex(x=>x.order===o.order&&x.amount===o.amount);
+        const idx = inventory.findIndex(x=>x.order===o.order&&x.amount===o.amount);
         if(idx>-1) inventory.splice(idx,1);
       }));
       saveDeleteRecords(); saveInventory(); renderDeleteRecords();
       document.getElementById('confirm-delete-btn').classList.add('hidden');
     };
 
-    document.getElementById('copy-btn').onclick=()=>{
+    document.getElementById('copy-btn').onclick = ()=>{
       navigator.clipboard.writeText(document.getElementById('result-output').textContent);
       alert('结果已复制');
     };
