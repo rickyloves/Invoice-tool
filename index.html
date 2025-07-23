@@ -2,42 +2,47 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>发票组合计算器 V6.45</title>
+  <title>发票组合计算器 V6.46</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
     body { font-family: Arial, sans-serif; margin:10px; }
     h2 { margin-top:0; }
     label { display:block; margin-top:10px; font-weight:bold; }
-    input, textarea, button { width:100%; padding:6px; margin-top:4px; box-sizing:border-box; }
+    input, textarea, button { padding:6px; margin-top:4px; box-sizing:border-box; }
+    /* 新增：两端输入框排版 */
+    .range-row { display:flex; align-items:center; margin-top:4px; }
+    .range-row input { flex:1; }
+    .range-row span { padding:0 8px; font-weight:bold; }
     .record-item { border:1px solid #ccc; padding:8px; margin-top:6px; }
-    #result-output { height:200px; white-space:pre-wrap; }
+    #result-output { width:100%; height:200px; white-space:pre-wrap; }
     #header-history button { margin:2px 4px 2px 0; padding:4px 8px; font-size:90%; }
   </style>
 </head>
 <body>
 
-  <h2>发票组合计算器 V6.45</h2>
+  <h2>发票组合计算器 V6.46</h2>
 
   <label>目标开票金额（元）：</label>
-  <input id="target-input" placeholder="如 20000">
+  <input id="target-input" style="width:100%;" placeholder="如 20000">
 
-  <label>单张发票金额下限（元）：</label>
-  <input id="min-single" type="number" placeholder="留空表示不限">
-
-  <label>单张发票金额上限（元）：</label>
-  <input id="max-single" type="number" placeholder="留空表示不限">
+  <label>单张发票金额范围（元）：</label>
+  <div class="range-row">
+    <input id="min-single" type="number" placeholder="下限">
+    <span>—</span>
+    <input id="max-single" type="number" placeholder="上限">
+  </div>
 
   <label>相同金额发票张数上限：</label>
-  <input id="max-same-count" type="number" placeholder="留空表示不限">
+  <input id="max-same-count" style="width:100%;" type="number" placeholder="留空表示不限">
 
   <label>公司抬头：</label>
-  <textarea id="company-header" rows="2" placeholder="行1：公司名称
+  <textarea id="company-header" style="width:100%;" rows="2" placeholder="行1：公司名称
 行2：统一社会信用代码"></textarea>
   <div id="header-history"></div>
 
-  <button id="combine-btn">一键组合</button>
-  <button id="copy-btn">复制结果</button>
-  <button id="confirm-delete-btn" style="display:none;">确认删除</button>
+  <button id="combine-btn" style="width:100%;">一键组合</button>
+  <button id="copy-btn" style="width:100%; margin-top:6px;">复制结果</button>
+  <button id="confirm-delete-btn" style="width:100%; margin-top:6px; display:none;">确认删除</button>
 
   <h3>导出结果</h3>
   <textarea id="result-output" readonly></textarea>
