@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>发票组合计算器 V6.31</title>
+  <title>发票组合计算器 V6.23</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 10px; }
     h2 { margin-top: 20px; }
@@ -15,7 +15,7 @@
 </style>
 </head>
 <body>
-  <h2>发票组合计算器 V6.31</h2>
+  <h2>发票组合计算器 V6.23</h2>
 
   <h2>设置参数</h2>
   <label>目标开票金额（元）：</label><input id="target-input" placeholder="如 20000">
@@ -65,15 +65,10 @@ function renderHeaderHistory() {
     btn.onclick = () => document.getElementById('company-header').value = h;
     div.appendChild(btn);
   });
-
-// 保存库存到 localStorage
-function saveInventory() {
-  localStorage.setItem('invoiceInventory', JSON.stringify(inventory));
-}
 }
 
-// 库存持久化加载
-let defaultInventory = [
+// 预加载库存
+let inventory = [
     {order: '33897710458', amount: 610.00},
     {order: '33898104698', amount: 610.00},
     {order: '33898544954', amount: 610.00},
@@ -525,11 +520,6 @@ let defaultInventory = [
     {order: '32948362426', amount: 8280.00},
     {order: '32938414266', amount: 8280.00}
 ];
-let inventory = JSON.parse(localStorage.getItem('invoiceInventory') || 'null');
-if (!inventory) {
-  inventory = defaultInventory.slice();
-  localStorage.setItem('invoiceInventory', JSON.stringify(inventory));
-}
 let deleteRecords = [], lastInvoices = [];
 
 // 全局最少订单DP，先过滤双重条件，再DP
@@ -618,19 +608,6 @@ function updateDeleteRecords(){
 
 
 document.addEventListener('DOMContentLoaded',()=>{
-    // 绑定确认删除
-    document.getElementById('confirm-delete-btn').addEventListener('click', function() {
-      if (!lastInvoices) return;
-      deleteRecords.unshift(lastInvoices);
-      if (deleteRecords.length > 20) deleteRecords.pop();
-      lastInvoices.forEach(inv => inv.orders.forEach(o => {
-        const idx = inventory.findIndex(x => x.order === o.order && x.amount === o.amount);
-        if (idx > -1) inventory.splice(idx, 1);
-      }));
-      saveInventory();
-      updateDeleteRecords();
-      this.style.display = 'none';
-    });
   renderHeaderHistory();
   document.getElementById('combine-btn').onclick=(function(){
     const tgt=parseFloat(document.getElementById('target-input').value);
@@ -645,12 +622,20 @@ document.addEventListener('DOMContentLoaded',()=>{
     const out=document.getElementById('result-output');
     if(!invs){out.value='无法组合出满足条件的金额';return;}
     lastInvoices=invs;renderResult(invs,header);
-        document.getElementById('confirm-delete-btn').style.display = 'block';
-        saveInventory();
     document.getElementById('confirm-delete-btn').style.display='block';
   });
   document.getElementById('copy-btn').onclick=()=>navigator.clipboard.writeText(document.getElementById('result-output').value).then(()=>alert('已复制结果'));
-  
+  document.getElementById('confirm-delete-btn').onclick=()=>{
+    if(!lastInvoices)return;
+    deleteRecords.unshift(lastInvoices);
+    if(deleteRecords.length>20)deleteRecords.pop();
+    lastInvoices.forEach(inv=>inv.orders.forEach(o=>{
+      const i=inventory.findIndex(x=>x.order===o.order&&x.amount===o.amount);
+      if(i>-1)inventory.splice(i,1);
+    }));
+    updateDeleteRecords();
+    document.getElementById('confirm-delete-btn').style.display='none';
+  };
   updateDeleteRecords();
 });
 </script>
