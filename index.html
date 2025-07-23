@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>发票组合计算器 V6.61</title>
+  <title>发票组合计算器 V6.62</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
     /* 基础重置 */
@@ -22,13 +22,15 @@
 
     /* 历史抬头 */
     #header-history { margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; }
-    #header-history button {
-      background:#e0e0e0; color:#333; border:none; border-radius:4px;
-      padding:6px 10px; font-size:0.9rem; cursor:pointer; transition:background .2s;
+    .hdr-item { display:flex; align-items:center; background:#e0e0e0; border-radius:4px; }
+    .hdr-item button.txt {
+      background:transparent; border:none; padding:6px 10px; font-size:0.9rem; cursor:pointer;
     }
-    #header-history button:hover {
-      background:#c0c0c0;
+    .hdr-item button.del {
+      background:transparent; border:none; padding:0 8px; font-size:1rem; color:#888; cursor:pointer;
+      transition:color .2s;
     }
+    .hdr-item button.del:hover { color:#f00; }
 
     /* 手风琴 */
     .accordion { border-radius:6px; overflow:hidden; }
@@ -44,7 +46,7 @@
       border-top:8px solid #666;
       transition:transform .3s;
     }
-    .accordion-header.collapsed .arrow {
+    .accordion-header.open .arrow {
       transform:rotate(180deg);
     }
     .accordion-content { display:none; background:#fff; padding:12px 16px; box-shadow:0 2px 5px rgba(0,0,0,0.05); }
@@ -56,9 +58,7 @@
       background:#007bff; color:#fff; border:none; border-radius:4px;
       font-size:0.9rem; cursor:pointer; transition:background .2s;
     }
-    .record-item .btn-recover:hover {
-      background:#0056b3;
-    }
+    .record-item .btn-recover:hover { background:#0056b3; }
 
     /* 结果区 */
     #result-output { white-space:pre-wrap; max-height:200px; overflow:auto; font-family:monospace; }
@@ -76,7 +76,7 @@
 </head>
 <body>
   <div class="container">
-    <h2>发票组合计算器 V6.61</h2>
+    <h2>发票组合计算器 V6.62</h2>
 
     <!-- 参数卡片 -->
     <div class="card">
@@ -115,8 +115,8 @@
 
     <!-- 删除记录手风琴 -->
     <div class="accordion">
-      <div class="accordion-header collapsed">
-        删除记录（最近20条）
+      <div class="accordion-header">
+        <span>删除记录（最近10条）</span>
         <div class="arrow"></div>
       </div>
       <div class="accordion-content" id="record-list"></div>
@@ -131,14 +131,16 @@
   </div>
 
 <script>
+  // 默认库存，替换为实际数据
   const defaultInventory = [
     {order:'23910608992',amount:1600},
     {order:'17938227424',amount:800},
-    // …你的数据…
+    // …
   ];
   let inventory = JSON.parse(localStorage.getItem('invoiceInventory')) || defaultInventory.slice();
   let deleteRecords = JSON.parse(localStorage.getItem('deleteRecords')) || [];
 
+  // 存储及历史抬头
   const saveInventory = ()=>localStorage.setItem('invoiceInventory', JSON.stringify(inventory));
   const saveDeleteRecords = ()=>localStorage.setItem('deleteRecords', JSON.stringify(deleteRecords));
   const loadHeaderHistory = ()=>JSON.parse(localStorage.getItem('headerHistory')||'[]');
@@ -146,19 +148,32 @@
     if(!h) return;
     let hist=loadHeaderHistory().filter(x=>x!==h);
     hist.unshift(h);
-    if(hist.length>20) hist.pop();
+    if(hist.length>10) hist.pop();  // 保留 10 条
     localStorage.setItem('headerHistory', JSON.stringify(hist));
   };
 
+  // 渲染
   function renderHeaderHistory(){
     const div=document.getElementById('header-history');
     div.innerHTML='';
-    loadHeaderHistory().forEach(h=>{
-      const btn=document.createElement('button');
-      btn.textContent=h;
-      btn.className=''; // 默认灰底
-      btn.onclick=()=>document.getElementById('company-header').value=h;
-      div.appendChild(btn);
+    loadHeaderHistory().forEach((h,i)=>{
+      const wrap=document.createElement('div');
+      wrap.className='hdr-item';
+      const txtBtn=document.createElement('button');
+      txtBtn.textContent=h;
+      txtBtn.className='txt';
+      txtBtn.onclick=()=>document.getElementById('company-header').value=h;
+      const delBtn=document.createElement('button');
+      delBtn.textContent='✕';
+      delBtn.className='del';
+      delBtn.onclick=()=>{
+        let hist=loadHeaderHistory().filter((x,idx)=>idx!==i);
+        localStorage.setItem('headerHistory', JSON.stringify(hist));
+        renderHeaderHistory();
+      };
+      wrap.appendChild(txtBtn);
+      wrap.appendChild(delBtn);
+      div.appendChild(wrap);
     });
   }
 
@@ -247,14 +262,13 @@
     renderHeaderHistory();
     renderDeleteRecords();
 
-    const accHdr=document.querySelector('.accordion-header');
-    const accCont=document.querySelector('.accordion-content');
-    const arrow=document.querySelector('.accordion-header .arrow');
-    accHdr.onclick=()=>{
-      const isOpen = accCont.style.display==='block';
-      accCont.style.display = isOpen ? 'none' : 'block';
-      accHdr.classList.toggle('collapsed', isOpen);
-      arrow.style.transform = isOpen ? 'none' : 'rotate(180deg)';
+    // 手风琴切换
+    const hdr=document.querySelector('.accordion-header');
+    const cont=document.querySelector('.accordion-content');
+    hdr.onclick=()=>{
+      const open = cont.style.display==='block';
+      cont.style.display = open ? 'none' : 'block';
+      hdr.classList.toggle('open', !open);
     };
 
     let lastInv=null;
@@ -273,8 +287,9 @@
       const invs=fewInvoices(tgt,minS,maxS,msc,ic);
       if(!invs) return alert('无法组合出满足条件的金额');
       lastInv=invs;
-      // 渲染
-      const out=[]; invs.forEach((inv,i)=>{
+      // 渲染结果
+      const out=[];
+      invs.forEach((inv,i)=>{
         out.push(`发票${i+1}：${inv.sum}元${inv.orders.length>1?'（相关订单合并）':''}`);
         inv.orders.forEach(o=> out.push(`订单号：${o.order}，金额：${o.amount}元`));
         out.push('');
@@ -282,7 +297,6 @@
       if(header) out.push(header,'');
       out.push('不需要备注','568881753@qq.com');
       document.getElementById('result-output').textContent=out.join('\n');
-
       document.getElementById('confirm-delete-btn').classList.remove('hidden');
     };
 
@@ -294,8 +308,7 @@
         const idx=inventory.findIndex(x=>x.order===o.order&&x.amount===o.amount);
         if(idx>-1) inventory.splice(idx,1);
       }));
-      saveDeleteRecords(); saveInventory();
-      renderDeleteRecords();
+      saveDeleteRecords(); saveInventory(); renderDeleteRecords();
       document.getElementById('confirm-delete-btn').classList.add('hidden');
     };
 
