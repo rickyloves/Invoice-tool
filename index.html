@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>发票组合计算器 V6.34</title>
+  <title>发票组合计算器 V6.35</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
     body { font-family: Arial, sans-serif; margin: 10px; }
@@ -11,12 +11,13 @@
     input, textarea, select, button { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; }
     .record-item { border: 1px solid #ccc; padding: 8px; margin-top: 6px; }
     #result-output { height: 200px; white-space: pre-wrap; }
-    #header-history button { margin: 2px; padding: 4px; }
+    #header-history { margin-top: 4px; }
+    #header-history button { margin: 2px 4px 2px 0; padding: 4px 8px; font-size: 90%; }
   </style>
 </head>
 <body>
 
-  <h2>发票组合计算器 V6.34</h2>
+  <h2>发票组合计算器 V6.35</h2>
 
   <label>目标开票金额（元）：</label>
   <input id="target-input" placeholder="如 20000">
@@ -53,14 +54,14 @@
 const defaultInventory = [
   {order:'23910608992',amount:1600.00},
   {order:'17938227424',amount:800.00},
-  // …… 这里填入所有从 Excel 导出的记录……
+  // …… 在这里填入所有订单数据 ……  
 ];
 
 // ====== 持久化数据加载 ======
 let inventory = JSON.parse(localStorage.getItem('invoiceInventory')) || defaultInventory.slice();
 let deleteRecords = JSON.parse(localStorage.getItem('deleteRecords')) || [];
 
-// ====== 持久化保存函数 ======
+// ====== 持久化保存 ======
 function saveInventory() {
   localStorage.setItem('invoiceInventory', JSON.stringify(inventory));
 }
@@ -68,7 +69,7 @@ function saveDeleteRecords() {
   localStorage.setItem('deleteRecords', JSON.stringify(deleteRecords));
 }
 
-// ====== 抬头历史 ======
+// ====== 抬头历史管理 ======
 function loadHeaderHistory() {
   return JSON.parse(localStorage.getItem('headerHistory') || '[]');
 }
@@ -85,7 +86,7 @@ function renderHeaderHistory() {
   loadHeaderHistory().forEach(h => {
     const b = document.createElement('button');
     b.textContent = h;
-    b.onclick = ()=>document.getElementById('company-header').value = h;
+    b.onclick = ()=> document.getElementById('company-header').value = h;
     div.appendChild(b);
   });
 }
@@ -138,9 +139,8 @@ function renderResult(list, header) {
   document.getElementById('result-output').value = lines.join('\n');
 }
 
-// ====== 核心算法（V6.18 版本已验证） ======
+// ====== 核心算法（V6.18 版本） ======
 function previewInvoices(target, maxSingle, maxSameCount, logic) {
-  // 过滤超过单张上限和同金额数量上限
   const byAmount = {};
   let usable = inventory.filter(o=>o.amount <= maxSingle);
   if (maxSameCount !== Infinity) {
@@ -149,7 +149,6 @@ function previewInvoices(target, maxSingle, maxSameCount, logic) {
       return byAmount[o.amount] <= maxSameCount;
     });
   }
-  // 全局最少订单 DP
   const dp = Array(target+1).fill(null);
   dp[0] = {count:0, orders:[]};
   usable.forEach((o,idx)=>{
@@ -163,7 +162,6 @@ function previewInvoices(target, maxSingle, maxSameCount, logic) {
     }
   });
   if (!dp[target]) return null;
-  // 构造结果
   const res = [];
   dp[target].orders.forEach(idx=>{
     res.push({ sum: usable[idx].amount, orders:[ usable[idx] ] });
@@ -171,7 +169,7 @@ function previewInvoices(target, maxSingle, maxSameCount, logic) {
   return res;
 }
 
-// ====== 交互绑定 ======
+// ====== 事件绑定 ======
 let lastInv = null;
 document.addEventListener('DOMContentLoaded', ()=>{
   renderHeaderHistory();
