@@ -34,7 +34,8 @@
   </select>
 
   <label>公司抬头：</label>
-  <textarea id="company-header" rows="2" placeholder="行1：公司名称\n行2：统一社会信用代码"></textarea>
+  <textarea id="company-header" rows="2" placeholder="行1：公司名称
+行2：统一社会信用代码"></textarea>
   <div id="header-history"></div>
 
   <button id="combine-btn">一键组合</button>
@@ -107,7 +108,6 @@ function renderDeleteRecords() {
     const btn = document.createElement('button');
     btn.textContent = '恢复';
     btn.onclick = ()=>{
-      // 恢复库存
       const rec = deleteRecords.splice(i,1)[0];
       rec.forEach(inv=>inv.orders.forEach(o=>inventory.push(o)));
       saveDeleteRecords();
@@ -150,7 +150,6 @@ function previewInvoices(target, maxSingle, maxSameCount, logic) {
     });
   }
   // 全局最少订单 DP
-  const n = usable.length;
   const dp = Array(target+1).fill(null);
   dp[0] = {count:0, orders:[]};
   usable.forEach((o,idx)=>{
@@ -169,7 +168,6 @@ function previewInvoices(target, maxSingle, maxSameCount, logic) {
   dp[target].orders.forEach(idx=>{
     res.push({ sum: usable[idx].amount, orders:[ usable[idx] ] });
   });
-  // 如果需要分散逻辑，可在这里排序或合并（略）
   return res;
 }
 
