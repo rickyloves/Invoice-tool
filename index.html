@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>发票组合计算器 V6.38</title>
+  <title>发票组合计算器 V6.39</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
     body { font-family: Arial, sans-serif; margin:10px; }
@@ -16,7 +16,7 @@
 </head>
 <body>
 
-  <h2>发票组合计算器 V6.38</h2>
+  <h2>发票组合计算器 V6.39</h2>
 
   <label>目标开票金额（元）：</label>
   <input id="target-input" placeholder="如 20000">
@@ -49,26 +49,26 @@
   <div id="record-list"></div>
 
 <script>
-// ====== 默认库存（请替换为完整订单） ======
+// ====== 默认库存，请替换为你的完整 Excel 数据 ======
 const defaultInventory = [
   {order:'23910608992',amount:1600.00},
   {order:'17938227424',amount:800.00},
-  // …继续填入所有订单…
+  // …填入所有订单数据…
 ];
 
 // ====== 持久化加载 ======
 let inventory = JSON.parse(localStorage.getItem('invoiceInventory')) || defaultInventory.slice();
 let deleteRecords = JSON.parse(localStorage.getItem('deleteRecords')) || [];
 
-// ====== 持久化保存 ======
-function saveInventory() { localStorage.setItem('invoiceInventory', JSON.stringify(inventory)); }
-function saveDeleteRecords() { localStorage.setItem('deleteRecords', JSON.stringify(deleteRecords)); }
+// ====== 存储 ======
+function saveInventory(){ localStorage.setItem('invoiceInventory', JSON.stringify(inventory)); }
+function saveDeleteRecords(){ localStorage.setItem('deleteRecords', JSON.stringify(deleteRecords)); }
 
 // ====== 抬头历史 ======
 function loadHeaderHistory(){ return JSON.parse(localStorage.getItem('headerHistory')||'[]'); }
-function saveHeaderHistory(h){ if(!h) return; let hist=loadHeaderHistory().filter(x=>x!==h); hist.unshift(h); if(hist.length>20) hist.pop(); localStorage.setItem('headerHistory',JSON.stringify(hist)); }
+function saveHeaderHistory(h){ if(!h) return; let hist = loadHeaderHistory().filter(x=>x!==h); hist.unshift(h); if(hist.length>20) hist.pop(); localStorage.setItem('headerHistory', JSON.stringify(hist)); }
 function renderHeaderHistory(){
-  const div=document.getElementById('header-history'); div.innerHTML='';
+  const div = document.getElementById('header-history'); div.innerHTML='';
   loadHeaderHistory().forEach(h=>{
     const b=document.createElement('button'); b.textContent=h;
     b.onclick=()=>document.getElementById('company-header').value=h;
@@ -84,9 +84,7 @@ function renderDeleteRecords(){
     let html=`批次 ${i+1}，共 ${batch.length} 张发票<br>`;
     batch.forEach((inv,j)=>{
       html+=`发票${j+1}：${inv.sum.toFixed(2)}${inv.orders.length>1?'（相关订单合并）':''}<br>`;
-      inv.orders.forEach(o=>{
-        html+=`&nbsp;&nbsp;订单号：${o.order}，金额：${o.amount.toFixed(2)}<br>`;
-      });
+      inv.orders.forEach(o=>html+=`&nbsp;&nbsp;订单号：${o.order}，金额：${o.amount.toFixed(2)}<br>`);
     });
     dv.innerHTML=html;
     const btn=document.createElement('button'); btn.textContent='恢复';
@@ -101,7 +99,7 @@ function renderDeleteRecords(){
 }
 
 // ====== 渲染结果 ======
-function renderResult(list,header){
+function renderResult(list, header){
   const lines=[];
   list.forEach((inv,i)=>{
     lines.push(`发票${i+1}：${inv.sum.toFixed(2)}${inv.orders.length>1?'（相关订单合并）':''}`);
@@ -110,53 +108,71 @@ function renderResult(list,header){
   });
   if(header){ lines.push(header,''); }
   lines.push('不需要备注','568881753@qq.com');
-  document.getElementById('result-output').value=lines.join('\n');
+  document.getElementById('result-output').value = lines.join('\n');
 }
 
-// ====== 全局最少订单（few）模式 ======
+// ====== 枚举 k 张的组合 ======
+function combineK(orders,target,k,maxSingle,maxSame){
+  const res=[],path=[],cnt={};
+  function dfs(start,sum){
+    if(sum>target||path.length>k) return;
+    if(path.length===k){
+      if(sum===target) res.push(path.slice());
+      return;
+    }
+    for(let i=start;i<orders.length;i++){
+      const o=orders[i];
+      if(o.amount>maxSingle) continue;
+      cnt[o.amount]=(cnt[o.amount]||0)+1;
+      if(cnt[o.amount]>maxSame){ cnt[o.amount]--; continue; }
+      path.push(i);
+      dfs(i+1,sum+o.amount);
+      path.pop();
+      cnt[o.amount]--;
+    }
+  }
+  dfs(0,0);
+  return res.map(idxs=>idxs.map(i=>orders[i]));
+}
+
+// ====== few 模式 ======
 function fewInvoices(target,maxSingle,maxSame){
   const dp=Array(target+1).fill(null); dp[0]={count:0,orders:[]};
   const usable=inventory.filter(o=>o.amount<=maxSingle)
     .filter((o,i,arr)=>arr.filter(x=>x.amount===o.amount).length<=maxSame);
   usable.forEach((o,idx)=>{
     for(let s=target;s>=o.amount;s--){
-      if(dp[s-o.amount] && (dp[s]===null || dp[s-o.amount].count+1<dp[s].count)){
+      if(dp[s-o.amount]&&(dp[s]===null||dp[s-o.amount].count+1<dp[s].count)){
         dp[s]={count:dp[s-o.amount].count+1,orders:dp[s-o.amount].orders.concat(idx)};
       }
     }
   });
-  if(!dp[target])return null;
+  if(!dp[target]) return null;
   return dp[target].orders.map(idx=>({orders:[usable[idx]],sum:usable[idx].amount}));
 }
 
-// ====== 分散模式（diverse）：贪心最大化最小差值 ======
+// ====== diverse 模式改进 ======
 function diverseInvoices(target,maxSingle,maxSame){
-  let usable=inventory.filter(o=>o.amount<=maxSingle);
+  // 1. 用 few 确定 k
+  const few = fewInvoices(target,maxSingle,maxSame);
+  if(!few) return null;
+  const k = few.length;
+  // 2. 筛选可用
+  let usable = inventory.filter(o=>o.amount<=maxSingle);
   if(maxSame!==Infinity){
-    const cnt={};
-    usable=usable.filter(o=>{cnt[o.amount]=(cnt[o.amount]||0)+1;return cnt[o.amount]<=maxSame;});
+    const freq={};
+    usable = usable.filter(o=>{ freq[o.amount]=(freq[o.amount]||0)+1; return freq[o.amount]<=maxSame; });
   }
-  let rem=target, result=[], picked=[];
-  while(rem>0){
-    // 候选：<=rem
-    const cands=usable.filter(o=>o.amount<=rem);
-    if(!cands.length) return null;
-    // 找到与已选最远的那张
-    let best=null, bestMinDiff=-1;
-    cands.forEach(o=>{
-      const diffs=picked.map(v=>Math.abs(o.amount-v));
-      const md=diffs.length?Math.min(...diffs):Infinity;
-      if(md>bestMinDiff){ bestMinDiff=md; best=o; }
-    });
-    // 选中
-    result.push({orders:[best],sum:best.amount});
-    picked.push(best.amount);
-    rem=+(rem-best.amount).toFixed(2);
-    // 从 usable 中移除 first occurrence
-    const idx=usable.findIndex(x=>x.order===best.order);
-    usable.splice(idx,1);
-  }
-  return result;
+  // 3. 枚举 k 组合，选最大化最小差值
+  const combos = combineK(usable,target,k,maxSingle,maxSame);
+  if(!combos.length) return null;
+  let bestCombo=null, bestDiff=-1;
+  combos.forEach(arr=>{
+    const vals=arr.map(o=>o.amount).sort((a,b)=>a-b);
+    let md=Infinity; for(let i=1;i<vals.length;i++) md=Math.min(md,vals[i]-vals[i-1]);
+    if(md>bestDiff){ bestDiff=md; bestCombo=arr; }
+  });
+  return bestCombo.map(o=>({orders:[o],sum:o.amount}));
 }
 
 // ====== 总入口 ======
@@ -166,14 +182,14 @@ function previewInvoices(target,maxSingle,maxSame,logic){
     : diverseInvoices(target,maxSingle,maxSame);
 }
 
-// ====== 交互绑定 ======
+// ====== 事件绑定 ======
 let lastInv=null;
 document.addEventListener('DOMContentLoaded',()=>{
   renderHeaderHistory(); renderDeleteRecords();
 
   document.getElementById('combine-btn').onclick=()=>{
     const tgt=parseFloat(document.getElementById('target-input').value);
-    if(!tgt)return alert('请输入目标金额');
+    if(!tgt) return alert('请输入目标金额');
     const ms=parseFloat(document.getElementById('max-single').value)||tgt;
     const msc=parseInt(document.getElementById('max-same-count').value)||Infinity;
     const logic=document.getElementById('logic-select').value;
@@ -181,18 +197,18 @@ document.addEventListener('DOMContentLoaded',()=>{
     saveHeaderHistory(header); renderHeaderHistory();
 
     const invs=previewInvoices(tgt,ms,msc,logic);
-    if(!invs)return alert('无法组合出满足条件的金额');
+    if(!invs) return alert('无法组合出满足条件的金额');
     lastInv=invs; renderResult(invs,header);
     document.getElementById('confirm-delete-btn').style.display='inline-block';
   };
 
   document.getElementById('confirm-delete-btn').onclick=()=>{
-    if(!lastInv)return;
+    if(!lastInv) return;
     deleteRecords.unshift(lastInv);
-    if(deleteRecords.length>20)deleteRecords.pop();
+    if(deleteRecords.length>20) deleteRecords.pop();
     lastInv.forEach(inv=>inv.orders.forEach(o=>{
       const i=inventory.findIndex(x=>x.order===o.order&&x.amount===o.amount);
-      if(i>-1)inventory.splice(i,1);
+      if(i>-1) inventory.splice(i,1);
     }));
     saveDeleteRecords(); saveInventory(); renderDeleteRecords();
     document.getElementById('confirm-delete-btn').style.display='none';
