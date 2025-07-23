@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>发票组合计算器 V6.41</title>
+  <title>发票组合计算器 V6.42</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
     body { font-family: Arial, sans-serif; margin:10px; }
@@ -16,7 +16,7 @@
 </head>
 <body>
 
-  <h2>发票组合计算器 V6.41</h2>
+  <h2>发票组合计算器 V6.42</h2>
 
   <label>目标开票金额（元）：</label>
   <input id="target-input" placeholder="如 20000">
@@ -26,9 +26,6 @@
 
   <label>相同金额发票张数上限：</label>
   <input id="max-same-count" type="number">
-
-  <label>组合逻辑：</label>
-  <p>（仅“订单数尽量少”模式）</p>
 
   <label>公司抬头：</label>
   <textarea id="company-header" rows="2" placeholder="行1：公司名称
@@ -139,7 +136,7 @@ function fewInvoices(target, maxSingle, maxSame){
   }));
 }
 
-// ====== 交互绑定 ======
+// ====== 事件绑定 ======
 let lastInv = null;
 document.addEventListener('DOMContentLoaded', ()=>{
   renderHeaderHistory();
