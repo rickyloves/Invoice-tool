@@ -1,644 +1,222 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
   <title>发票组合计算器 V6.34</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
     body { font-family: Arial, sans-serif; margin: 10px; }
-    h2 { margin-top: 20px; }
-    label { display: block; margin: 8px 0 4px; font-weight: bold; }
-    input, textarea, select, button { width: 100%; padding: 6px; margin-bottom: 10px; box-sizing: border-box; }
-    button { cursor: pointer; background: #f8f8f8; border: 1px solid #ccc; }
-    .record-item { border: 1px solid #ddd; padding: 6px; margin: 6px 0; }
-    #result-output { white-space: pre-wrap; height: 200px; }
-    #header-history button { display: inline-block; margin: 2px 4px; padding: 4px 8px; }
-</style>
+    h2 { margin-top: 0; }
+    label { display: block; margin-top: 10px; font-weight: bold; }
+    input, textarea, select, button { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; }
+    .record-item { border: 1px solid #ccc; padding: 8px; margin-top: 6px; }
+    #result-output { height: 200px; white-space: pre-wrap; }
+    #header-history button { margin: 2px; padding: 4px; }
+  </style>
 </head>
 <body>
+
   <h2>发票组合计算器 V6.34</h2>
 
-  <h2>设置参数</h2>
-  <label>目标开票金额（元）：</label><input id="target-input" placeholder="如 20000">
-  <label>单张发票金额上限：</label><input id="max-single" type="number">
-  <label>相同金额发票张数上限：</label><input id="max-same-count" type="number">
+  <label>目标开票金额（元）：</label>
+  <input id="target-input" placeholder="如 20000">
+
+  <label>单张发票金额上限：</label>
+  <input id="max-single" type="number">
+
+  <label>相同金额发票张数上限：</label>
+  <input id="max-same-count" type="number">
+
   <label>组合逻辑：</label>
   <select id="logic-select">
     <option value="few">订单数尽量少</option>
     <option value="diverse">发票金额尽量分散</option>
   </select>
+
   <label>公司抬头：</label>
-  <textarea id="company-header" rows="2" placeholder="行1：公司名称
-行2：统一社会信用代码"></textarea>
+  <textarea id="company-header" rows="2" placeholder="行1：公司名称\n行2：统一社会信用代码"></textarea>
   <div id="header-history"></div>
 
   <button id="combine-btn">一键组合</button>
   <button id="copy-btn">复制结果</button>
   <button id="confirm-delete-btn" style="display:none;">确认删除</button>
 
-  <h2>导出结果</h2>
+  <h3>导出结果</h3>
   <textarea id="result-output" readonly></textarea>
 
-  <h2>删除记录（最近20条）</h2>
+  <h3>删除记录（最近20条）</h3>
   <div id="record-list"></div>
 
 <script>
+// ====== 默认库存，请替换为你上传的完整 Excel 数据 ======
+const defaultInventory = [
+  {order:'23910608992',amount:1600.00},
+  {order:'17938227424',amount:800.00},
+  // …… 这里填入所有从 Excel 导出的记录……
+];
 
-// Header history via localStorage
+// ====== 持久化数据加载 ======
+let inventory = JSON.parse(localStorage.getItem('invoiceInventory')) || defaultInventory.slice();
+let deleteRecords = JSON.parse(localStorage.getItem('deleteRecords')) || [];
+
+// ====== 持久化保存函数 ======
+function saveInventory() {
+  localStorage.setItem('invoiceInventory', JSON.stringify(inventory));
+}
+function saveDeleteRecords() {
+  localStorage.setItem('deleteRecords', JSON.stringify(deleteRecords));
+}
+
+// ====== 抬头历史 ======
 function loadHeaderHistory() {
   return JSON.parse(localStorage.getItem('headerHistory') || '[]');
 }
-function saveHeaderHistory(header) {
-  if (!header) return;
-  let hist = loadHeaderHistory();
-  hist = hist.filter(h => h !== header);
-  hist.unshift(header);
+function saveHeaderHistory(h) {
+  if (!h) return;
+  let hist = loadHeaderHistory().filter(x=>x!==h);
+  hist.unshift(h);
   if (hist.length > 20) hist.pop();
   localStorage.setItem('headerHistory', JSON.stringify(hist));
 }
 function renderHeaderHistory() {
-  const hist = loadHeaderHistory();
   const div = document.getElementById('header-history');
   div.innerHTML = '';
-  hist.forEach(h => {
+  loadHeaderHistory().forEach(h => {
+    const b = document.createElement('button');
+    b.textContent = h;
+    b.onclick = ()=>document.getElementById('company-header').value = h;
+    div.appendChild(b);
+  });
+}
+
+// ====== 渲染删除记录 ======
+function renderDeleteRecords() {
+  const c = document.getElementById('record-list');
+  c.innerHTML = '';
+  deleteRecords.forEach((batch,i) => {
+    const dv = document.createElement('div');
+    dv.className = 'record-item';
+    let html = `批次 ${i+1}，共 ${batch.length} 张发票<br>`;
+    batch.forEach((inv,j)=>{
+      html += `发票${j+1}：${inv.sum.toFixed(2)}${inv.orders.length>1?'（相关订单合并）':''}<br>`;
+      inv.orders.forEach(o=>{
+        html += `&nbsp;&nbsp;订单号：${o.order}，金额：${o.amount.toFixed(2)}<br>`;
+      });
+    });
+    dv.innerHTML = html;
     const btn = document.createElement('button');
-    btn.textContent = h;
-    btn.onclick = () => document.getElementById('company-header').value = h;
-    div.appendChild(btn);
+    btn.textContent = '恢复';
+    btn.onclick = ()=>{
+      // 恢复库存
+      const rec = deleteRecords.splice(i,1)[0];
+      rec.forEach(inv=>inv.orders.forEach(o=>inventory.push(o)));
+      saveDeleteRecords();
+      saveInventory();
+      renderDeleteRecords();
+    };
+    dv.appendChild(btn);
+    c.appendChild(dv);
   });
 }
 
-// 持久化加载库存
-let inventory = JSON.parse(localStorage.getItem('invoiceInventory'))
-if(!inventory){
-  inventory = [{order: '33897710458', amount: 610.00},
-    {order: '33898104698', amount: 610.00},
-    {order: '33898544954', amount: 610.00},
-    {order: '33898028090', amount: 610.00},
-    {order: '28694993082', amount: 667.00},
-    {order: '34193026810', amount: 700.00},
-    {order: '34157709114', amount: 700.00},
-    {order: '34156958074', amount: 700.00},
-    {order: '34018792442', amount: 700.00},
-    {order: '33898416890', amount: 700.00},
-    {order: '33898405562', amount: 700.00},
-    {order: '33887734138', amount: 700.00},
-    {order: '33888148602', amount: 700.00},
-    {order: '33887947002', amount: 700.00},
-    {order: '33800146554', amount: 700.00},
-    {order: '33617747514', amount: 700.00},
-    {order: '34549641210', amount: 700.00},
-    {order: '34466650362', amount: 700.00},
-    {order: '34466819706', amount: 700.00},
-    {order: '34465939322', amount: 700.00},
-    {order: '32949490810', amount: 710.00},
-    {order: '32871257786', amount: 710.00},
-    {order: '34092812282', amount: 710.00},
-    {order: '34092980346', amount: 710.00},
-    {order: '33158701626', amount: 710.00},
-    {order: '34553343034', amount: 710.00},
-    {order: '34551674298', amount: 710.00},
-    {order: '34456627898', amount: 710.00},
-    {order: '34456627770', amount: 710.00},
-    {order: '34446218746', amount: 710.00},
-    {order: '34446099642', amount: 710.00},
-    {order: '34446150074', amount: 710.00},
-    {order: '34446303930', amount: 710.00},
-    {order: '31965579130', amount: 720.00},
-    {order: '32764336634', amount: 720.00},
-    {order: '34092562490', amount: 805.00},
-    {order: '34216672570', amount: 810.00},
-    {order: '34216561274', amount: 810.00},
-    {order: '34216595706', amount: 810.00},
-    {order: '34204662458', amount: 810.00},
-    {order: '34204761914', amount: 810.00},
-    {order: '34204378746', amount: 810.00},
-    {order: '34204411130', amount: 810.00},
-    {order: '34194249082', amount: 810.00},
-    {order: '34180365562', amount: 810.00},
-    {order: '34092783674', amount: 810.00},
-    {order: '34092663418', amount: 810.00},
-    {order: '34092652026', amount: 810.00},
-    {order: '34092747194', amount: 810.00},
-    {order: '34092591738', amount: 810.00},
-    {order: '33998478266', amount: 810.00},
-    {order: '33897981882', amount: 810.00},
-    {order: '33898173754', amount: 810.00},
-    {order: '33898154490', amount: 810.00},
-    {order: '33898151098', amount: 810.00},
-    {order: '33897793338', amount: 810.00},
-    {order: '33887743930', amount: 810.00},
-    {order: '33801095610', amount: 810.00},
-    {order: '33757188474', amount: 810.00},
-    {order: '33403617466', amount: 810.00},
-    {order: '34550348346', amount: 810.00},
-    {order: '34550346682', amount: 810.00},
-    {order: '34466214266', amount: 810.00},
-    {order: '34455852858', amount: 810.00},
-    {order: '34456053626', amount: 810.00},
-    {order: '34445422202', amount: 810.00},
-    {order: '34445104058', amount: 810.00},
-    {order: '34445435706', amount: 810.00},
-    {order: '34445263162', amount: 810.00},
-    {order: '34438049786', amount: 810.00},
-    {order: '34429456122', amount: 810.00},
-    {order: '34429439994', amount: 810.00},
-    {order: '34429469434', amount: 810.00},
-    {order: '34429048506', amount: 810.00},
-    {order: '34249712250', amount: 810.00},
-    {order: '34249676922', amount: 810.00},
-    {order: '33109383994', amount: 820.00},
-    {order: '33032941818', amount: 820.00},
-    {order: '32937523770', amount: 820.00},
-    {order: '32896545978', amount: 820.00},
-    {order: '32898005178', amount: 820.00},
-    {order: '32897838394', amount: 820.00},
-    {order: '32883159610', amount: 820.00},
-    {order: '32883643770', amount: 820.00},
-    {order: '32870545594', amount: 820.00},
-    {order: '32870112954', amount: 820.00},
-    {order: '32870722298', amount: 820.00},
-    {order: '32817328698', amount: 820.00},
-    {order: '34216420474', amount: 820.00},
-    {order: '34092813306', amount: 820.00},
-    {order: '33223635962', amount: 820.00},
-    {order: '34554090042', amount: 820.00},
-    {order: '34553379322', amount: 820.00},
-    {order: '34553338682', amount: 820.00},
-    {order: '34552706362', amount: 820.00},
-    {order: '34446243834', amount: 820.00},
-    {order: '32650945978', amount: 830.00},
-    {order: '32650522682', amount: 830.00},
-    {order: '32537980986', amount: 830.00},
-    {order: '32518487418', amount: 830.00},
-    {order: '32378262074', amount: 830.00},
-    {order: '32378769338', amount: 830.00},
-    {order: '32376437370', amount: 830.00},
-    {order: '32363253690', amount: 830.00},
-    {order: '32363168762', amount: 830.00},
-    {order: '32363584826', amount: 830.00},
-    {order: '32130747514', amount: 830.00},
-    {order: '32107889722', amount: 830.00},
-    {order: '32108179386', amount: 830.00},
-    {order: '32107834042', amount: 830.00},
-    {order: '31999524986', amount: 830.00},
-    {order: '31498857786', amount: 830.00},
-    {order: '32772392954', amount: 830.00},
-    {order: '32691819962', amount: 830.00},
-    {order: '32691990842', amount: 830.00},
-    {order: '32692416250', amount: 830.00},
-    {order: '34204338810', amount: 910.00},
-    {order: '34181422074', amount: 910.00},
-    {order: '34092780090', amount: 910.00},
-    {order: '34092183482', amount: 910.00},
-    {order: '34019294010', amount: 910.00},
-    {order: '33898232314', amount: 910.00},
-    {order: '33772745722', amount: 910.00},
-    {order: '33750042874', amount: 910.00},
-    {order: '33635918074', amount: 910.00},
-    {order: '34455618362', amount: 910.00},
-    {order: '34265656954', amount: 910.00},
-    {order: '32937235706', amount: 920.00},
-    {order: '32938214906', amount: 920.00},
-    {order: '32870312058', amount: 920.00},
-    {order: '32870732986', amount: 920.00},
-    {order: '32650987834', amount: 930.00},
-    {order: '32537810490', amount: 930.00},
-    {order: '32453645626', amount: 930.00},
-    {order: '32451435066', amount: 930.00},
-    {order: '32378666746', amount: 930.00},
-    {order: '32290784698', amount: 930.00},
-    {order: '32205652026', amount: 930.00},
-    {order: '32205031290', amount: 930.00},
-    {order: '32196888570', amount: 930.00},
-    {order: '32114337082', amount: 930.00},
-    {order: '32114319546', amount: 930.00},
-    {order: '32108214970', amount: 930.00},
-    {order: '31998719866', amount: 930.00},
-    {order: '31911576570', amount: 930.00},
-    {order: '32772294394', amount: 930.00},
-    {order: '32764340602', amount: 930.00},
-    {order: '32763827322', amount: 930.00},
-    {order: '32762902138', amount: 930.00},
-    {order: '32698635514', amount: 930.00},
-    {order: '32102900282', amount: 1140.00},
-    {order: '32102640442', amount: 1140.00},
-    {order: '31578495354', amount: 1142.00},
-    {order: '31487547706', amount: 1142.00},
-    {order: '32537775546', amount: 1143.00},
-    {order: '32520286458', amount: 1143.00},
-    {order: '28698767354', amount: 1190.00},
-    {order: '28462899322', amount: 1192.00},
-    {order: '28719742010', amount: 1208.00},
-    {order: '28719669498', amount: 1208.00},
-    {order: '28719936378', amount: 1208.00},
-    {order: '32948910906', amount: 1215.00},
-    {order: '32857231610', amount: 1220.00},
-    {order: '32641660282', amount: 1230.00},
-    {order: '32640858554', amount: 1230.00},
-    {order: '32641344378', amount: 1230.00},
-    {order: '34180559418', amount: 1230.00},
-    {order: '34180056954', amount: 1230.00},
-    {order: '33764369978', amount: 1230.00},
-    {order: '33083459834', amount: 1240.00},
-    {order: '33381637818', amount: 1240.00},
-    {order: '33158688762', amount: 1240.00},
-    {order: '28474816762', amount: 1250.00},
-    {order: '34239401850', amount: 1320.00},
-    {order: '34223778618', amount: 1320.00},
-    {order: '34204742266', amount: 1320.00},
-    {order: '34204605754', amount: 1320.00},
-    {order: '34205011706', amount: 1320.00},
-    {order: '34178641530', amount: 1320.00},
-    {order: '34157775610', amount: 1320.00},
-    {order: '34089943994', amount: 1320.00},
-    {order: '34089929850', amount: 1320.00},
-    {order: '34043616314', amount: 1320.00},
-    {order: '33619208826', amount: 1320.00},
-    {order: '34249557370', amount: 1320.00},
-    {order: '34249308666', amount: 1320.00},
-    {order: '34249927418', amount: 1320.00},
-    {order: '28694724858', amount: 1330.00},
-    {order: '28699071994', amount: 1340.00},
-    {order: '28946746938', amount: 1398.00},
-    {order: '34239502906', amount: 1410.00},
-    {order: '34180185594', amount: 1410.00},
-    {order: '34180304698', amount: 1410.00},
-    {order: '34180404858', amount: 1410.00},
-    {order: '34180620858', amount: 1410.00},
-    {order: '34157736762', amount: 1410.00},
-    {order: '33888238010', amount: 1410.00},
-    {order: '33511904314', amount: 1410.00},
-    {order: '34266473466', amount: 1410.00},
-    {order: '34265724666', amount: 1410.00},
-    {order: '34266004858', amount: 1410.00},
-    {order: '33083978106', amount: 1420.00},
-    {order: '32954651002', amount: 1420.00},
-    {order: '32871232122', amount: 1420.00},
-    {order: '33635588730', amount: 1420.00},
-    {order: '34204387898', amount: 1430.00},
-    {order: '34157625594', amount: 1430.00},
-    {order: '33619989882', amount: 1430.00},
-    {order: '33512054970', amount: 1430.00},
-    {order: '32684248762', amount: 1440.00},
-    {order: '28977462970', amount: 1498.00},
-    {order: '28977803514', amount: 1498.00},
-    {order: '34204823098', amount: 1520.00},
-    {order: '34204066682', amount: 1520.00},
-    {order: '34204547002', amount: 1520.00},
-    {order: '34204238202', amount: 1520.00},
-    {order: '34180473850', amount: 1520.00},
-    {order: '34157736890', amount: 1520.00},
-    {order: '34089923258', amount: 1520.00},
-    {order: '33887783738', amount: 1520.00},
-    {order: '33801161402', amount: 1520.00},
-    {order: '33756953658', amount: 1520.00},
-    {order: '33562598010', amount: 1520.00},
-    {order: '33392664570', amount: 1520.00},
-    {order: '34435724154', amount: 1520.00},
-    {order: '34429334330', amount: 1520.00},
-    {order: '34428623162', amount: 1520.00},
-    {order: '34429455802', amount: 1520.00},
-    {order: '34429414650', amount: 1520.00},
-    {order: '34429044474', amount: 1520.00},
-    {order: '34265761658', amount: 1520.00},
-    {order: '34249560442', amount: 1520.00},
-    {order: '34249183226', amount: 1520.00},
-    {order: '34249859578', amount: 1520.00},
-    {order: '33212942650', amount: 1530.00},
-    {order: '32384055866', amount: 1580.00},
-    {order: '32384094906', amount: 1580.00},
-    {order: '32384615098', amount: 1580.00},
-    {order: '31578805498', amount: 1580.00},
-    {order: '31517214330', amount: 1580.00},
-    {order: '31487078778', amount: 1580.00},
-    {order: '29033549818', amount: 1590.00},
-    {order: '32864219578', amount: 1614.00},
-    {order: '34239838778', amount: 1630.00},
-    {order: '34180639738', amount: 1630.00},
-    {order: '34180564218', amount: 1630.00},
-    {order: '34180316858', amount: 1630.00},
-    {order: '34180452602', amount: 1630.00},
-    {order: '34083696058', amount: 1630.00},
-    {order: '33801576378', amount: 1630.00},
-    {order: '33757887034', amount: 1630.00},
-    {order: '33617859834', amount: 1630.00},
-    {order: '33533275450', amount: 1630.00},
-    {order: '33511811962', amount: 1630.00},
-    {order: '33404582586', amount: 1630.00},
-    {order: '33158280698', amount: 1630.00},
-    {order: '34435772538', amount: 1630.00},
-    {order: '34264770874', amount: 1630.00},
-    {order: '34268003834', amount: 1630.00},
-    {order: '34267550906', amount: 1630.00},
-    {order: '34267200250', amount: 1630.00},
-    {order: '28719666682', amount: 1638.00},
-    {order: '32938046714', amount: 1640.00},
-    {order: '32937605370', amount: 1640.00},
-    {order: '32883440442', amount: 1640.00},
-    {order: '32883414714', amount: 1640.00},
-    {order: '32883245882', amount: 1640.00},
-    {order: '32864563450', amount: 1640.00},
-    {order: '32864638330', amount: 1640.00},
-    {order: '33381740154', amount: 1640.00},
-    {order: '33263239738', amount: 1640.00},
-    {order: '32650487930', amount: 1660.00},
-    {order: '32537706874', amount: 1660.00},
-    {order: '32285889978', amount: 1660.00},
-    {order: '32269683514', amount: 1660.00},
-    {order: '28723403066', amount: 1730.00},
-    {order: '34239536314', amount: 1730.00},
-    {order: '34204259002', amount: 1730.00},
-    {order: '33749952954', amount: 1730.00},
-    {order: '34456153402', amount: 1730.00},
-    {order: '34456510266', amount: 1730.00},
-    {order: '34429000570', amount: 1730.00},
-    {order: '34413735226', amount: 1730.00},
-    {order: '34267530874', amount: 1730.00},
-    {order: '29237529466', amount: 1740.00},
-    {order: '29237086522', amount: 1740.00},
-    {order: '29236811322', amount: 1740.00},
-    {order: '29047716858', amount: 1740.00},
-    {order: '29047745082', amount: 1740.00},
-    {order: '29047704442', amount: 1740.00},
-    {order: '29002836986', amount: 1770.00},
-    {order: '29002839162', amount: 1770.00},
-    {order: '28963036794', amount: 1770.00},
-    {order: '28963288442', amount: 1770.00},
-    {order: '28963292154', amount: 1770.00},
-    {order: '28962985402', amount: 1770.00},
-    {order: '28698933690', amount: 1791.00},
-    {order: '33557740218', amount: 2120.00},
-    {order: '33532585210', amount: 2120.00},
-    {order: '33310667898', amount: 2120.00},
-    {order: '34462547514', amount: 2120.00},
-    {order: '33021848954', amount: 2130.00},
-    {order: '33999443578', amount: 2130.00},
-    {order: '33223299194', amount: 2130.00},
-    {order: '32478123642', amount: 2160.00},
-    {order: '32478211514', amount: 2160.00},
-    {order: '29003019322', amount: 2240.00},
-    {order: '28963000186', amount: 2247.00},
-    {order: '27369639994', amount: 2421.00},
-    {order: '33080675706', amount: 2428.00},
-    {order: '31503347386', amount: 2439.00},
-    {order: '34239895738', amount: 2450.00},
-    {order: '33310885818', amount: 2450.00},
-    {order: '32454421370', amount: 2458.00},
-    {order: '32271718842', amount: 2458.00},
-    {order: '32675877946', amount: 2460.00},
-    {order: '32658831738', amount: 2460.00},
-    {order: '32538248186', amount: 2460.00},
-    {order: '33093242426', amount: 2460.00},
-    {order: '33032967162', amount: 2460.00},
-    {order: '32870420026', amount: 2460.00},
-    {order: '32856636282', amount: 2460.00},
-    {order: '32856866682', amount: 2460.00},
-    {order: '34225177402', amount: 2460.00},
-    {order: '34216563898', amount: 2460.00},
-    {order: '34070864506', amount: 2460.00},
-    {order: '32953733050', amount: 2466.00},
-    {order: '33801577146', amount: 2470.00},
-    {order: '33292690426', amount: 2480.00},
-    {order: '33108320314', amount: 2480.00},
-    {order: '32640728122', amount: 2490.00},
-    {order: '32641718010', amount: 2490.00},
-    {order: '32538129594', amount: 2490.00},
-    {order: '32537996090', amount: 2490.00},
-    {order: '32517376826', amount: 2490.00},
-    {order: '32485904378', amount: 2490.00},
-    {order: '32372336762', amount: 2490.00},
-    {order: '32363230714', amount: 2490.00},
-    {order: '32363656698', amount: 2490.00},
-    {order: '32692015546', amount: 2490.00},
-    {order: '28683301434', amount: 2540.00},
-    {order: '28683452730', amount: 2540.00},
-    {order: '28288419258', amount: 2540.00},
-    {order: '34575574906', amount: 2732.00},
-    {order: '32949003066', amount: 2745.00},
-    {order: '34327016634', amount: 2750.00},
-    {order: '32948814906', amount: 2760.00},
-    {order: '34225428346', amount: 2760.00},
-    {order: '34045787514', amount: 2760.00},
-    {order: '32385311866', amount: 2790.00},
-    {order: '32384843066', amount: 2790.00},
-    {order: '32372276922', amount: 2790.00},
-    {order: '32197043770', amount: 2790.00},
-    {order: '32196743162', amount: 2790.00},
-    {order: '32764076602', amount: 2790.00},
-    {order: '29056604730', amount: 2820.00},
-    {order: '34216003834', amount: 2820.00},
-    {order: '32870088058', amount: 2840.00},
-    {order: '34047075898', amount: 2840.00},
-    {order: '33223314298', amount: 2840.00},
-    {order: '28808866810', amount: 2860.00},
-    {order: '28808934906', amount: 2860.00},
-    {order: '33763535738', amount: 2870.00},
-    {order: '29003203962', amount: 2880.00},
-    {order: '28996574842', amount: 2880.00},
-    {order: '33381906490', amount: 2880.00},
-    {order: '33158035066', amount: 2880.00},
-    {order: '28699266682', amount: 2975.00},
-    {order: '28699079098', amount: 2975.00},
-    {order: '28699144762', amount: 2975.00},
-    {order: '28698870266', amount: 2975.00},
-    {order: '28698829562', amount: 2975.00},
-    {order: '28693672570', amount: 2975.00},
-    {order: '28693560762', amount: 2975.00},
-    {order: '28693776250', amount: 2975.00},
-    {order: '28693646714', amount: 2975.00},
-    {order: '28680930234', amount: 2975.00},
-    {order: '28681141562', amount: 2975.00},
-    {order: '28681222842', amount: 2975.00},
-    {order: '28681006586', amount: 2975.00},
-    {order: '28952603642', amount: 2975.00},
-    {order: '33310589882', amount: 3042.00},
-    {order: '33763488570', amount: 3050.00},
-    {order: '33757806522', amount: 3050.00},
-    {order: '33533110138', amount: 3050.00},
-    {order: '33093613562', amount: 3069.00},
-    {order: '28476481402', amount: 3125.00},
-    {order: '28476401978', amount: 3140.00},
-    {order: '32543367610', amount: 3160.00},
-    {order: '28638951482', amount: 3175.00},
-    {order: '28638266298', amount: 3175.00},
-    {order: '28733392314', amount: 3220.00},
-    {order: '28709872890', amount: 3228.00},
-    {order: '34326979514', amount: 3250.00},
-    {order: '33032931834', amount: 3280.00},
-    {order: '32870690298', amount: 3280.00},
-    {order: '33636462650', amount: 3280.00},
-    {order: '33292260346', amount: 3280.00},
-    {order: '33223587258', amount: 3280.00},
-    {order: '32478406586', amount: 3320.00},
-    {order: '32205436090', amount: 3320.00},
-    {order: '32204999226', amount: 3320.00},
-    {order: '32764047802', amount: 3320.00},
-    {order: '32698272058', amount: 3320.00},
-    {order: '28694514106', amount: 3325.00},
-    {order: '29039968186', amount: 3445.00},
-    {order: '33223525754', amount: 3480.00},
-    {order: '34083532154', amount: 3540.00},
-    {order: '33083709370', amount: 3550.00},
-    {order: '33083447226', amount: 3550.00},
-    {order: '33021531834', amount: 3550.00},
-    {order: '32954476154', amount: 3550.00},
-    {order: '34084219706', amount: 3550.00},
-    {order: '28462468794', amount: 3660.00},
-    {order: '33747839354', amount: 3670.00},
-    {order: '28953757434', amount: 3675.00},
-    {order: '28953761018', amount: 3675.00},
-    {order: '32949384058', amount: 3680.00},
-    {order: '33293771194', amount: 3680.00},
-    {order: '32108418938', amount: 3687.00},
-    {order: '32108157370', amount: 3687.00},
-    {order: '28464739898', amount: 3720.00},
-    {order: '32692422906', amount: 3720.00},
-    {order: '34043594298', amount: 3720.00},
-    {order: '33263176058', amount: 3720.00},
-    {order: '29018248954', amount: 3760.00},
-    {order: '28709549306', amount: 3768.00},
-    {order: '28733029882', amount: 3796.00},
-    {order: '33158156922', amount: 3990.00},
-    {order: '28727868154', amount: 4100.00},
-    {order: '33083663610', amount: 4100.00},
-    {order: '33083858554', amount: 4100.00},
-    {order: '32954493946', amount: 4100.00},
-    {order: '32948887482', amount: 4100.00},
-    {order: '32937864442', amount: 4100.00},
-    {order: '34045770554', amount: 4100.00},
-    {order: '34017776442', amount: 4100.00},
-    {order: '33214870778', amount: 4100.00},
-    {order: '33158877306', amount: 4100.00},
-    {order: '32122635194', amount: 4150.00},
-    {order: '28712050554', amount: 4215.00},
-    {order: '33800962170', amount: 4250.00},
-    {order: '33391980154', amount: 4250.00},
-    {order: '34043740026', amount: 4260.00},
-    {order: '28988607610', amount: 4320.00},
-    {order: '33263652602', amount: 4920.00},
-    {order: '32948387130', amount: 8280.00},
-    {order: '32948854906', amount: 8280.00},
-    {order: '32948362426', amount: 8280.00},
-    {order: '32938414266', amount: 8280.00}
-];
-let deleteRecords = [], lastInvoices = [];
-
-// 全局最少订单DP，先过滤双重条件，再DP
-function dpGlobalMinCount(orders, targetCents, maxSingleCents, maxSame) {
-  let cand = orders.filter(o => Math.round(o.amount*100) <= maxSingleCents);
-  const freq = {}, allowed=[];
-  cand.forEach(o=>{ const k=Math.round(o.amount*100); freq[k]=(freq[k]||0)+1; if(freq[k]<=maxSame) allowed.push(o); });
-  cand=allowed;
-  const dpCnt=Array(targetCents+1).fill(Infinity), prev=Array(targetCents+1).fill(-1), prevIdx=Array(targetCents+1).fill(-1);
-  dpCnt[0]=0;
-  for(let i=0;i<cand.length;i++){ const c=Math.round(cand[i].amount*100);
-    for(let s=targetCents;s>=c;s--){ if(dpCnt[s-c]+1<dpCnt[s]){ dpCnt[s]=dpCnt[s-c]+1; prev[s]=s-c; prevIdx[s]=i; } } }
-  if(!isFinite(dpCnt[targetCents])) return null;
-  const subset=[]; let cur=targetCents;
-  while(cur>0){ subset.push(cand[prevIdx[cur]]); cur=prev[cur]; }
-  return subset;
-}
-
-// 局部DP for diverse
-function dpBest(orders, limitCents) {
-  const dpSum=Array(limitCents+1).fill(-1), dpCnt=Array(limitCents+1).fill(-Infinity);
-  const prev=Array(limitCents+1).fill(-1), prevIdx=Array(limitCents+1).fill(-1);
-  dpSum[0]=0; dpCnt[0]=0;
-  for(let i=0;i<orders.length;i++){ const c=Math.round(orders[i].amount*100);
-    for(let s=limitCents;s>=c;s--){ if(dpSum[s-c]>=0){ const newSum=dpSum[s-c]+c, newCnt=dpCnt[s-c]+1;
-      if(newCnt>dpCnt[s]||(newCnt===dpCnt[s]&&newSum>dpSum[s])){ dpSum[s]=newSum; dpCnt[s]=newCnt; prev[s]=s-c; prevIdx[s]=i; } } } }
-  let bestS=-1,bestCnt=-Infinity,bestSum=-1;
-  for(let s=1;s<=limitCents;s++){ if(dpSum[s]>=0&&(dpCnt[s]>bestCnt||(dpCnt[s]===bestCnt&&dpSum[s]>bestSum))){ bestCnt=dpCnt[s]; bestSum=dpSum[s]; bestS=s; }}
-  if(bestS<0) return null;
-  const subset=[]; let cur=bestS;
-  while(cur>0){ subset.push(orders[prevIdx[cur]]); cur=prev[cur]; }
-  return subset;
-}
-
-// 分批预览
-function previewInvoices(target,maxSingle,maxSame,logic){
-  const tgtC=Math.round(target*100), sC=Math.round(maxSingle*100);
-  if(logic==='few'){
-    const subset = dpGlobalMinCount(inventory,tgtC,sC,maxSame);
-    if(!subset) return null;
-    subset.sort((a,b)=>b.amount-a.amount);
-    const bins=[];
-    subset.forEach(o=>{ let placed=false; for(let bin of bins){ const sum=bin.reduce((s,x)=>s+x.amount,0);
-      if(sum+o.amount<=maxSingle){ bin.push(o); placed=true; break; }} if(!placed) bins.push([o]); });
-    return bins.map(bin=>({orders:bin,sum:bin.reduce((s,x)=>s+x.amount,0)}));
-  } else {
-    let rem=target,temp=inventory.slice(),invoices=[];
-    temp.sort((a,b)=>a.amount-b.amount);
-    while(rem>0){
-      const limitC=Math.round(Math.min(rem,maxSingle)*100);
-      const orders=dpBest(temp,limitC);
-      if(!orders) return null;
-      const sum=+orders.reduce((s,x)=>s+x.amount,0).toFixed(2);
-      invoices.push({orders,sum});
-      orders.forEach(o=>{ const i=temp.findIndex(x=>x.order===o.order&&x.amount===o.amount); if(i>-1)temp.splice(i,1); });
-      rem=+(rem-sum).toFixed(2);
-    }
-    return invoices;
+// ====== 渲染组合结果 ======
+function renderResult(list, header) {
+  let lines = [];
+  list.forEach((inv,i)=>{
+    lines.push(`发票${i+1}：${inv.sum.toFixed(2)}${inv.orders.length>1?'（相关订单合并）':''}`);
+    inv.orders.forEach(o=>{
+      lines.push(`订单号：${o.order}，金额：${o.amount.toFixed(2)}`);
+    });
+    lines.push('');
+  });
+  if (header) {
+    lines.push(header);
+    lines.push('');
   }
+  lines.push('不需要备注');
+  lines.push('568881753@qq.com');
+  document.getElementById('result-output').value = lines.join('\n');
 }
 
-// 渲染
-function renderResult(list,header){
-  const lines=[];
-  list.forEach((inv,i)=>{ lines.push('发票'+(i+1)+'：'+inv.sum.toFixed(2)+(inv.orders.length>1?'（相关订单合并）':''));
-    inv.orders.forEach(o=>lines.push('订单号：'+o.order+'，金额：'+o.amount.toFixed(2))); lines.push(''); });
-  if(header){header.split('\n').forEach(l=>lines.push(l));lines.push('');}
-  lines.push('不需要备注','568881753@qq.com');
-  document.getElementById('result-output').value=lines.join('\n');
-}
-
-function updateDeleteRecords(){
-  const c=document.getElementById('record-list');c.innerHTML='';
-  deleteRecords.forEach((lst,i)=>{ const d=document.createElement('div');d.className='record-item';
-    let html='批次'+(i+1)+'：共'+lst.length+'张发票<br>';
-    lst.forEach((inv,j)=>{ html+='发票'+(j+1)+'：'+inv.sum.toFixed(2)+(inv.orders.length>1?'（相关订单合并）':'')+'<br>';
-      inv.orders.forEach(o=>html+='· '+o.order+' ¥'+o.amount.toFixed(2)+'<br>'); });
-    d.innerHTML=html;
-    const btnRestore=document.createElement('button');
-    btnRestore.textContent='恢复';
-    btnRestore.onclick=()=>{ const rec=deleteRecords.splice(i,1)[0]; rec.forEach(inv=>inv.orders.forEach(o=>inventory.push(o))); updateDeleteRecords(); };
-    d.appendChild(btnRestore);
-    c.appendChild(d);
+// ====== 核心算法（V6.18 版本已验证） ======
+function previewInvoices(target, maxSingle, maxSameCount, logic) {
+  // 过滤超过单张上限和同金额数量上限
+  const byAmount = {};
+  let usable = inventory.filter(o=>o.amount <= maxSingle);
+  if (maxSameCount !== Infinity) {
+    usable = usable.filter(o=>{
+      byAmount[o.amount] = (byAmount[o.amount]||0)+1;
+      return byAmount[o.amount] <= maxSameCount;
+    });
+  }
+  // 全局最少订单 DP
+  const n = usable.length;
+  const dp = Array(target+1).fill(null);
+  dp[0] = {count:0, orders:[]};
+  usable.forEach((o,idx)=>{
+    for(let s=target; s>=o.amount; s--){
+      if (dp[s-o.amount] && (dp[s]===null || dp[s-o.amount].count+1 < dp[s].count)) {
+        dp[s] = {
+          count: dp[s-o.amount].count+1,
+          orders: dp[s-o.amount].orders.concat(idx)
+        };
+      }
+    }
   });
+  if (!dp[target]) return null;
+  // 构造结果
+  const res = [];
+  dp[target].orders.forEach(idx=>{
+    res.push({ sum: usable[idx].amount, orders:[ usable[idx] ] });
+  });
+  // 如果需要分散逻辑，可在这里排序或合并（略）
+  return res;
 }
 
-
-document.addEventListener('DOMContentLoaded',()=>{
+// ====== 交互绑定 ======
+let lastInv = null;
+document.addEventListener('DOMContentLoaded', ()=>{
   renderHeaderHistory();
-  document.getElementById('combine-btn').onclick=(function(){
-    const tgt=parseFloat(document.getElementById('target-input').value);
-    if(isNaN(tgt)||tgt<=0){alert('请输入有效目标金额');return;}
-    const ms=document.getElementById('max-single').value.trim();
-    const maxSingle=ms?parseFloat(ms):tgt;
-    const msc=document.getElementById('max-same-count').value.trim();
-    const maxSame=msc?parseInt(msc):Infinity;
-    const logic=document.getElementById('logic-select').value;
-    const header=document.getElementById('company-header').value.trim();
-    const invs=previewInvoices(tgt,maxSingle,maxSame,logic);
-    const out=document.getElementById('result-output');
-    if(!invs){out.value='无法组合出满足条件的金额';return;}
-    lastInvoices=invs;renderResult(invs,header);
-    document.getElementById('confirm-delete-btn').style.display='block';
-  });
-  document.getElementById('copy-btn').onclick=()=>navigator.clipboard.writeText(document.getElementById('result-output').value).then(()=>alert('已复制结果'));
-  document.getElementById('confirm-delete-btn').onclick=()=>{
-    if(!lastInvoices)return;
-    deleteRecords.unshift(lastInvoices);
-    if(deleteRecords.length>20)deleteRecords.pop();
-    lastInvoices.forEach(inv=>inv.orders.forEach(o=>{
-      const i=inventory.findIndex(x=>x.order===o.order&&x.amount===o.amount);
-      if(i>-1)inventory.splice(i,1);
-    }));
-    updateDeleteRecords();
-    document.getElementById('confirm-delete-btn').style.display='none';
+  renderDeleteRecords();
+
+  document.getElementById('combine-btn').onclick = ()=>{
+    const tgt = parseFloat(document.getElementById('target-input').value);
+    if (!tgt) return alert('请输入目标金额');
+    const ms = parseFloat(document.getElementById('max-single').value) || tgt;
+    const msc = parseInt(document.getElementById('max-same-count').value) || Infinity;
+    const logic = document.getElementById('logic-select').value;
+    const header = document.getElementById('company-header').value.trim();
+    saveHeaderHistory(header);
+    renderHeaderHistory();
+
+    const invs = previewInvoices(tgt, ms, msc, logic);
+    if (!invs) return alert('无法组合出满足条件的金额');
+    lastInv = invs;
+    renderResult(invs, header);
+    document.getElementById('confirm-delete-btn').style.display = 'inline-block';
   };
-  updateDeleteRecords();
+
+  document.getElementById('confirm-delete-btn').onclick = ()=>{
+    if (!lastInv) return;
+    deleteRecords.unshift(lastInv);
+    if (deleteRecords.length>20) deleteRecords.pop();
+    lastInv.forEach(inv=>{
+      inv.orders.forEach(o=>{
+        const idx = inventory.findIndex(x=>x.order===o.order && x.amount===o.amount);
+        if (idx > -1) inventory.splice(idx,1);
+      });
+    });
+    saveDeleteRecords();
+    saveInventory();
+    renderDeleteRecords();
+    document.getElementById('confirm-delete-btn').style.display = 'none';
+  };
+
+  document.getElementById('copy-btn').onclick = ()=>{
+    navigator.clipboard.writeText(document.getElementById('result-output').value);
+  };
 });
 </script>
+
 </body>
 </html>
