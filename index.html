@@ -2,14 +2,13 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>发票组合计算器 V6.46</title>
+  <title>发票组合计算器 V6.47</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
     body { font-family: Arial, sans-serif; margin:10px; }
     h2 { margin-top:0; }
     label { display:block; margin-top:10px; font-weight:bold; }
     input, textarea, button { padding:6px; margin-top:4px; box-sizing:border-box; }
-    /* 新增：两端输入框排版 */
     .range-row { display:flex; align-items:center; margin-top:4px; }
     .range-row input { flex:1; }
     .range-row span { padding:0 8px; font-weight:bold; }
@@ -20,12 +19,12 @@
 </head>
 <body>
 
-  <h2>发票组合计算器 V6.46</h2>
+  <h2>发票组合计算器 V6.47</h2>
 
-  <label>目标开票金额（元）：</label>
+  <label>目标开票金额：</label>
   <input id="target-input" style="width:100%;" placeholder="如 20000">
 
-  <label>单张发票金额范围（元）：</label>
+  <label>单张发票金额范围：</label>
   <div class="range-row">
     <input id="min-single" type="number" placeholder="下限">
     <span>—</span>
@@ -86,8 +85,8 @@ function renderDeleteRecords(){
     const dv=document.createElement('div'); dv.className='record-item';
     let html=`批次 ${i+1}，共 ${batch.length} 张发票<br>`;
     batch.forEach((inv,j)=>{
-      html+=`发票${j+1}：${inv.sum.toFixed(2)}${inv.orders.length>1?'（相关订单合并）':''}<br>`;
-      inv.orders.forEach(o=>html+=`&nbsp;&nbsp;订单号：${o.order}，金额：${o.amount.toFixed(2)}<br>`);
+      html+=`发票${j+1}：${formatAmt(inv.sum)}${inv.orders.length>1?'（相关订单合并）':''}<br>`;
+      inv.orders.forEach(o=>html+=`&nbsp;&nbsp;订单号：${o.order}，金额：${formatAmt(o.amount)}<br>`);
     });
     dv.innerHTML=html;
     const btn=document.createElement('button');
@@ -101,12 +100,21 @@ function renderDeleteRecords(){
   });
 }
 
+// ====== 格式化金额：去除“ .00 ”并加 “元” ======
+function formatAmt(x){
+  let s = Number(x).toString();
+  if(s.indexOf('.')>0){
+    s = parseFloat(x.toFixed(2)).toString();
+  }
+  return s + '元';
+}
+
 // ====== 渲染结果 ======
 function renderResult(list, header){
   const lines=[];
   list.forEach((inv,i)=>{
-    lines.push(`发票${i+1}：${inv.sum.toFixed(2)}${inv.orders.length>1?'（相关订单合并）':''}`);
-    inv.orders.forEach(o=>lines.push(`订单号：${o.order}，金额：${o.amount.toFixed(2)}`));
+    lines.push(`发票${i+1}：${formatAmt(inv.sum)}${inv.orders.length>1?'（相关订单合并）':''}`);
+    inv.orders.forEach(o=>lines.push(`订单号：${o.order}，金额：${formatAmt(o.amount)}`));
     lines.push('');
   });
   if(header){ lines.push(header,''); }
