@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>发票组合计算器 V6.61</title>
+  <title>发票组合计算器 V6.62</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
     * { box-sizing:border-box; margin:0; padding:0 }
@@ -11,7 +11,7 @@
       max-width:480px;
       margin:auto;
       padding:10px;
-      padding-bottom:120px; /* 底部按钮留白 */
+      padding-bottom:100px; /* 底部按钮留白 */
     }
     h2 { font-size:1.5rem; margin-bottom:12px; text-align:center }
     label { display:block; margin-top:12px; font-weight:bold }
@@ -31,19 +31,12 @@
     .accordion-content { display:none; padding:0 12px 12px }
     .record-item { border-top:1px solid #eee; padding:8px 0 }
     .record-item:first-child { border-top:none }
-    .footer {
-      position:fixed; bottom:0; left:0; right:0;
-      background:#fff; padding:6px;
-      box-shadow:0 -2px 5px rgba(0,0,0,0.1);
-      z-index:100;
-    }
-    .footer .btn { margin-top:4px }
   </style>
 </head>
 <body>
 
   <div class="container">
-    <h2>发票组合计算器 V6.61</h2>
+    <h2>发票组合计算器 V6.62</h2>
 
     <div class="card">
       <label>目标开票金额</label>
@@ -81,9 +74,8 @@
       <div class="accordion-header">删除记录（最近20条）</div>
       <div class="accordion-content" id="record-list"></div>
     </div>
-  </div>
 
-  <div class="footer">
+    <!-- 挪到 container 里，避免被底部 fixed 覆盖 -->
     <button id="combine-btn" class="btn btn-primary">一键组合</button>
     <button id="copy-btn" class="btn btn-secondary">复制结果</button>
     <button id="confirm-delete-btn" class="btn btn-secondary" style="display:none;">确认删除</button>
@@ -117,10 +109,10 @@ function renderHeaderHistory(){
   div.innerHTML='';
   loadHeaderHistory().forEach(h=>{
     const btn = document.createElement('button');
-    btn.textContent = h.replace(/\n/g,' ');  // 把换行替换成空格
+    btn.textContent = h.replace(/\n/g,' ');  // 把换行替成空格
     btn.className = 'btn btn-secondary';
     btn.style.marginRight='6px';
-    btn.onclick = ()=>document.getElementById('company-header').value = h;
+    btn.onclick = ()=>document.getElementById('company-header').value = h.replace(/\n/g,' ');
     div.appendChild(btn);
   });
 }
@@ -161,7 +153,7 @@ function renderResult(list, header){
   document.getElementById('result-output').textContent = out.join('\n');
 }
 
-// ===== 核心算法 =====
+// ===== 算法 =====
 function subsetMinOrders(target, arr){
   const dp=Array(target+1).fill(null);
   dp[0]={cnt:0,picks:[]};
@@ -182,7 +174,6 @@ function fewInvoices(target,minS,maxS,maxSame,invoiceCount){
       ? inventory.filter(x=>x.amount===o.amount).length<=maxSame
       : true
     );
-  if(!usable.length) return null;
   const memo=new Map();
   function dfs(remT,k,avail){
     const key=`${remT}|${k}|${avail.map(o=>o.order).join(',')}`;
@@ -219,7 +210,7 @@ function fewInvoices(target,minS,maxS,maxSame,invoiceCount){
   return dfs(target,invoiceCount,usable);
 }
 
-// ===== 事件绑定 =====
+// ===== 交互 =====
 document.addEventListener('DOMContentLoaded',()=>{
   renderHeaderHistory();
   renderDeleteRecords();
@@ -245,8 +236,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 
     const invs=fewInvoices(tgt,minS,maxS,msc,ic);
     if(!invs) return alert('无法组合出满足条件的金额');
-    lastInv=invs;
-    renderResult(invs,header);
+    lastInv=invs; renderResult(invs,header);
     btnDel.style.display='block';
   };
 
