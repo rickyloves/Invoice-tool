@@ -2,16 +2,18 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>发票组合计算器 V6.55</title>
+  <title>发票组合计算器 V6.56</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
     body { font-family: Arial, sans-serif; margin:10px; }
     h2 { margin-top:0; }
     label { display:block; margin-top:10px; font-weight:bold; }
     input, textarea, button { padding:6px; margin-top:4px; box-sizing:border-box; }
-    .range-row { display:flex; align-items:center; margin-top:4px; }
+    input.small { width:150px; }   /* 普通小输入框 */
+    textarea { width:100%; }
+    .range-row { display:flex; align-items:center; gap:8px; }
     .range-row input { flex:1; }
-    .range-row span { padding:0 8px; font-weight:bold; }
+    .range-row span { padding:0 4px; font-weight:bold; }
     .record-item { border:1px solid #ccc; padding:8px; margin-top:6px; }
     #result-output { width:100%; height:200px; white-space:pre-wrap; }
     #header-history button { margin:2px 4px 2px 0; padding:4px 8px; font-size:90%; }
@@ -19,31 +21,32 @@
 </head>
 <body>
 
-  <h2>发票组合计算器 V6.55</h2>
+  <h2>发票组合计算器 V6.56</h2>
 
   <label>目标开票金额：</label>
   <input id="target-input" style="width:100%;" placeholder="如 20000">
 
   <label>单张发票金额范围：</label>
   <div class="range-row">
-    <input id="min-single" type="number" placeholder="下限">
+    <input id="min-single" class="small" type="number" placeholder="下限">
     <span>—</span>
-    <input id="max-single" type="number" placeholder="上限">
+    <input id="max-single" class="small" type="number" placeholder="上限">
   </div>
 
   <div class="range-row" style="margin-top:10px;">
-    <div style="flex:1;">
+    <div>
       <label>相同金额发票张数上限：</label>
-      <input id="max-same-count" style="width:100%;" type="number" placeholder="留空表示不限">
+      <input id="max-same-count" class="small" type="number" placeholder="留空表示不限">
     </div>
-    <div style="flex:1; margin-left:10px;">
+    <div>
       <label>发票张数：</label>
-      <input id="invoice-count" style="width:100%;" type="number" placeholder="留空表示不限">
+      <input id="invoice-count" class="small" type="number" placeholder="留空表示不限">
     </div>
   </div>
 
   <label>公司抬头：</label>
-  <textarea id="company-header" style="width:100%;" rows="2" placeholder="行1：公司名称\n行2：统一社会信用代码"></textarea>
+  <textarea id="company-header" rows="2" placeholder="行1：公司名称
+行2：统一社会信用代码"></textarea>
   <div id="header-history"></div>
 
   <button id="combine-btn" style="width:100%; margin-top:10px;">一键组合</button>
@@ -74,7 +77,7 @@ function saveDeleteRecords(){ localStorage.setItem('deleteRecords', JSON.stringi
 
 // ====== 抬头历史 ======
 function loadHeaderHistory(){ return JSON.parse(localStorage.getItem('headerHistory')||'[]'); }
-function saveHeaderHistory(h){
+function saveHeaderHistory(h){ 
   if(!h) return;
   let hist = loadHeaderHistory().filter(x=>x!==h);
   hist.unshift(h);
@@ -82,8 +85,7 @@ function saveHeaderHistory(h){
   localStorage.setItem('headerHistory', JSON.stringify(hist));
 }
 function renderHeaderHistory(){
-  const div = document.getElementById('header-history');
-  div.innerHTML = '';
+  const div = document.getElementById('header-history'); div.innerHTML='';
   loadHeaderHistory().forEach(h=>{
     const b = document.createElement('button');
     b.textContent = h;
@@ -94,11 +96,9 @@ function renderHeaderHistory(){
 
 // ====== 渲染删除记录 ======
 function renderDeleteRecords(){
-  const c = document.getElementById('record-list');
-  c.innerHTML = '';
+  const c = document.getElementById('record-list'); c.innerHTML='';
   deleteRecords.forEach((batch,i)=>{
-    const dv = document.createElement('div');
-    dv.className = 'record-item';
+    const dv = document.createElement('div'); dv.className='record-item';
     let html = `批次 ${i+1}，共 ${batch.length} 张发票<br>`;
     batch.forEach((inv,j)=>{
       html += `发票${j+1}：${formatAmt(inv.sum)}${inv.orders.length>1?'（相关订单合并）':''}<br>`;
@@ -119,10 +119,12 @@ function renderDeleteRecords(){
   });
 }
 
-// ====== 格式化金额 ======
+// ====== 格式化金额：去除“.00”并加“元” ======
 function formatAmt(x){
   let s = Number(x).toString();
-  if(s.indexOf('.')>0) s = parseFloat(x.toFixed(2)).toString();
+  if(s.indexOf('.')>0){
+    s = parseFloat(x.toFixed(2)).toString();
+  }
   return s + '元';
 }
 
@@ -134,80 +136,55 @@ function renderResult(list, header){
     inv.orders.forEach(o=>lines.push(`订单号：${o.order}，金额：${formatAmt(o.amount)}`));
     lines.push('');
   });
-  if(header) { lines.push(header,''); }
+  if(header){ lines.push(header,''); }
   lines.push('不需要备注','568881753@qq.com');
   document.getElementById('result-output').value = lines.join('\n');
 }
 
-// ====== 子集最少订单 DP（用来求和） ======
-function subsetMinOrders(target, arr){
-  const dp = Array(target+1).fill(null);
-  dp[0] = { cnt:0, picks:[] };
-  for(let i=0; i<arr.length; i++){
-    const a = arr[i].amount;
-    for(let s=target; s>=a; s--){
-      if(dp[s-a] && (!dp[s] || dp[s-a].cnt+1 < dp[s].cnt)){
-        dp[s] = { cnt: dp[s-a].cnt+1, picks: dp[s-a].picks.concat(i) };
-      }
-    }
-  }
-  return dp[target];
-}
+// ====== 全局最少订单 DP ======
+function fewInvoices(target, minSingle, maxSingle, maxSame, invoiceCount){
+  // dp[s][k] = {count, orders_idx[]}
+  const dp = Array(target+1).fill(null).map(()=>[]);
+  dp[0][0] = { count:0, orders:[] };
 
-// ====== fewInvoices：支持固定张数递归拆分 ======
-function fewInvoices(target, minS, maxS, maxSame, invoiceCount){
-  // 筛可用
+  // 过滤可用订单
   const usable = inventory
-    .filter(o=>o.amount>=minS && o.amount<=maxS)
-    .filter(o=> isFinite(maxSame)
-      ? inventory.filter(x=>x.amount===o.amount).length <= maxSame
-      : true
-    );
-  if(!usable.length) return null;
+    .filter(o=>o.amount>=minSingle && o.amount<=maxSingle)
+    .filter(o=>{
+      if(!isFinite(maxSame)) return true;
+      return inventory.filter(x=>x.amount===o.amount).length <= maxSame;
+    });
 
-  const memo = new Map();
-  function dfs(remT, k, avail){
-    const key = `${remT}|${k}|${avail.map(o=>o.order).join(',')}`;
-    if(memo.has(key)) return memo.get(key);
-
-    // 最后一张
-    if(k===1){
-      const rec = subsetMinOrders(remT, avail);
-      if(!rec) return null;
-      const pick = rec.picks.map(i=>avail[i]);
-      return [ { orders: pick, sum: remT } ];
-    }
-
-    // 先尝试以子集 DP 找第一张的所有可能和（可优化：只枚举 distinct sums）
-    // 这里简化：我们直接用 subsetMinOrders 去尝试各种 possibleSum
-    for(let i=0;i<avail.length;i++){
-      const rec = subsetMinOrders(avail[i].amount, avail.slice(i));
-      if(!rec) continue;
-      const pick = rec.picks.map(j=>avail[i + j]);
-      const sumPick = pick.reduce((a,o)=>a+o.amount,0);
-      if(sumPick < minS || sumPick > maxS) continue;
-      // 剩余
-      const rest = avail.filter(o=>!pick.includes(o));
-      const sub = dfs(remT - sumPick, k-1, rest);
-      if(sub){
-        const result = [ { orders: pick, sum: sumPick }, ...sub ];
-        memo.set(key, result);
-        return result;
+  usable.forEach((o,idx)=>{
+    for(let s=target; s>=o.amount; s--){
+      for(let k=0; k<dp[s-o.amount].length; k++){
+        const prev = dp[s-o.amount][k];
+        if(!prev) continue;
+        const nextCount = prev.count + 1;
+        // 发票张数限制
+        if(isFinite(invoiceCount) && nextCount>invoiceCount) continue;
+        const curr = dp[s][nextCount];
+        if(!curr || nextCount < dp[s][nextCount].count){
+          dp[s][nextCount] = {
+            count: nextCount,
+            orders: prev.orders.concat(idx)
+          };
+        }
       }
     }
-    memo.set(key, null);
-    return null;
-  }
+  });
 
-  // 如果用户没填发票张数，就按子集求单张发票
-  if(!invoiceCount){
-    const rec = subsetMinOrders(target, usable);
-    if(!rec) return null;
-    const pick = rec.picks.map(i=>usable[i]);
-    return [ { orders: pick, sum: target } ];
-  }
-  // 固定张数拆分
-  return dfs(target, invoiceCount, usable);
+  // 选最少张数
+  const rows = dp[target];
+  if(!rows || rows.length===0) return null;
+  const best = rows.filter(r=>r).reduce((a,b)=>(!a||b.count<a.count)?b:a,null);
+  if(!best) return null;
+
+  const orders = best.orders.map(i=>usable[i]);
+  return [{
+    orders,
+    sum: orders.reduce((a,o)=>a+o.amount,0)
+  }];
 }
 
 // ====== 事件绑定 ======
@@ -219,16 +196,16 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('combine-btn').onclick = ()=>{
     const tgt = parseFloat(document.getElementById('target-input').value);
     if(!tgt) return alert('请输入目标金额');
-    const minS = parseFloat(document.getElementById('min-single').value)||0;
-    const maxS = parseFloat(document.getElementById('max-single').value)||tgt;
+    const minS = parseFloat(document.getElementById('min-single').value) || 0;
+    const maxS = parseFloat(document.getElementById('max-single').value) || tgt;
     if(minS>maxS) return alert('下限不可大于上限');
-    const msc = parseInt(document.getElementById('max-same-count').value)||Infinity;
-    const ic  = parseInt(document.getElementById('invoice-count').value)||0;
+    const msc = parseInt(document.getElementById('max-same-count').value) || Infinity;
+    const icnt = parseInt(document.getElementById('invoice-count').value);
+    const invoiceCount = isNaN(icnt)? Infinity : icnt;
     const header = document.getElementById('company-header').value.trim();
-    saveHeaderHistory(header);
-    renderHeaderHistory();
+    saveHeaderHistory(header); renderHeaderHistory();
 
-    const invs = fewInvoices(tgt, minS, maxS, msc, ic);
+    const invs = fewInvoices(tgt,minS,maxS,msc,invoiceCount);
     if(!invs) return alert('无法组合出满足条件的金额');
     lastInv = invs;
     renderResult(invs, header);
@@ -240,8 +217,8 @@ document.addEventListener('DOMContentLoaded',()=>{
     deleteRecords.unshift(lastInv);
     if(deleteRecords.length>20) deleteRecords.pop();
     lastInv.forEach(inv=>inv.orders.forEach(o=>{
-      const idx = inventory.findIndex(x=>x.order===o.order&&x.amount===o.amount);
-      if(idx>-1) inventory.splice(idx,1);
+      const i = inventory.findIndex(x=>x.order===o.order&&x.amount===o.amount);
+      if(i>-1) inventory.splice(i,1);
     }));
     saveDeleteRecords(); saveInventory();
     renderDeleteRecords();
