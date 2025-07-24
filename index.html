@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>发票组合计算器 V7.6</title>
+  <title>发票组合计算器 V7.7</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
     /* 基础重置 */
@@ -38,19 +38,22 @@
     .hdr-item button.del:hover { color:#666 }
 
     /* 手风琴 */
-    .accordion { border-radius:6px; overflow:hidden }
+    .accordion { border-radius:6px; overflow:hidden; margin-bottom:12px }
     .accordion-header {
       background:#fff; padding:12px 16px; cursor:pointer;
       font-weight:bold; box-shadow:0 2px 5px rgba(0,0,0,0.05);
       display:flex; justify-content:space-between; align-items:center;
     }
     .accordion-header .arrow {
-      width:16px; height:8px; border:2px solid #666;
-      border-top:none; border-left:none;
-      transform:rotate(45deg);
+      width:0; height:0;
+      border-left:6px solid transparent;
+      border-right:6px solid transparent;
+      border-top:6px solid #666;
       transition:transform .3s;
     }
-    .accordion-header.open .arrow { transform:rotate(-135deg); }
+    .accordion-header.open .arrow {
+      transform:rotate(180deg);
+    }
     .accordion-content { display:none; background:#fff; padding:12px 16px; box-shadow:0 2px 5px rgba(0,0,0,0.05) }
 
     .record-item { border-top:1px solid #eee; padding:8px 0 }
@@ -79,7 +82,7 @@
 </head>
 <body>
   <div class="container">
-    <h2>发票组合计算器 V7.6</h2>
+    <h2>发票组合计算器 V7.7</h2>
 
     <div class="card">
       <label>目标开票金额</label>
@@ -116,7 +119,7 @@
 
     <div class="accordion">
       <div class="accordion-header">
-        <span>删除记录（最近不限条）</span>
+        <span>删除记录（最近10条）</span>
         <div class="arrow"></div>
       </div>
       <div class="accordion-content" id="record-list"></div>
@@ -145,7 +148,7 @@
     if(!h) return;
     let hist = loadHeaderHistory().filter(x=>x!==h);
     hist.unshift(h);
-    if(hist.length>10) hist.pop();
+    if(hist.length>10) hist.pop();  // 保留历史抬头上限 10
     localStorage.setItem('headerHistory', JSON.stringify(hist));
   };
 
@@ -174,7 +177,7 @@
   function renderDeleteRecords(){
     const list = document.getElementById('record-list');
     list.innerHTML = '';
-    deleteRecords.forEach((batch,i)=>{
+    deleteRecords.slice(0,10).forEach((batch,i)=>{  // 仅展示前 10 条
       const item = document.createElement('div');
       item.className = 'record-item';
       let html = `批次 ${i+1}：共 ${batch.length} 张订单<br><div class="orders">`;
@@ -198,7 +201,6 @@
     });
   }
 
-  // 精简版：子集 DP，用来找 exact sum 时的 picks
   function subsetMinOrders(target, arr){
     const dp = Array(target+1).fill(null);
     dp[0] = {cnt:0,picks:[]};
@@ -214,7 +216,6 @@
   }
 
   function fewInvoices(tgt, minS, maxS, maxSame, ic){
-    // 只过滤掉金额 > maxS 的订单
     const usable = inventory.filter(o=>o.amount<=maxS)
       .filter(o=>isFinite(maxSame)
         ? inventory.filter(x=>x.amount===o.amount).length<=maxSame
@@ -227,7 +228,6 @@
       const key = `${remT}|${k}|${avail.map(o=>o.order).join(',')}`;
       if(memo.has(key)) return memo.get(key);
 
-      // 最后一张发票
       if(k===1){
         if(remT<minS||remT>maxS){ memo.set(key,null); return null; }
         const r = subsetMinOrders(remT, avail);
@@ -238,18 +238,17 @@
         return res;
       }
 
-      // 先做一次「所有 possible 发票总额 dp」
+      // 枚举所有可能的单张发票总额
       const dpAll = Array(maxS+1).fill(null);
       dpAll[0] = [];
       for(let i=0;i<avail.length;i++){
-        const a = avail[i].amount;
+        const a=avail[i].amount;
         for(let s=maxS; s>=a; s--){
           if(dpAll[s-a]!==null && dpAll[s]===null){
             dpAll[s] = dpAll[s-a].concat(i);
           }
         }
       }
-      // 枚举所有在 [minS..maxS] 范围内可行的发票总额
       for(let s=minS; s<=maxS; s++){
         const pickIdx = dpAll[s];
         if(!pickIdx) continue;
@@ -267,7 +266,6 @@
       return null;
     }
 
-    // 如果不限制张数，就直接整合成一张
     if(!ic){
       const r = subsetMinOrders(tgt, usable);
       if(!r) return null;
@@ -283,9 +281,9 @@
     const hdr = document.querySelector('.accordion-header'),
           cont= document.querySelector('.accordion-content');
     hdr.onclick = ()=>{
-      const open = cont.style.display==='block';
-      cont.style.display = open?'none':'block';
-      hdr.classList.toggle('open',!open);
+      const isOpen = cont.style.display==='block';
+      cont.style.display = isOpen?'none':'block';
+      hdr.classList.toggle('open',!isOpen);
     };
 
     let lastInv = null;
