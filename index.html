@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>发票组合计算器 V7.9</title>
+  <title>发票组合计算器 V8.0</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
     /* 基础重置 */
@@ -20,7 +20,7 @@
     .two-cols { display:flex; gap:8px; margin-top:6px }
     .two-cols > div { flex:1 }
 
-    /* 历史抬头：浅灰底 & 深灰字，扁平删除 */
+    /* 历史抬头 */
     #header-history { margin-top:8px; display:flex; flex-wrap:wrap; gap:6px }
     .hdr-item {
       background:#ececec; color:#555;
@@ -43,6 +43,7 @@
       background:#fff; padding:12px 16px; cursor:pointer;
       font-weight:bold; box-shadow:0 2px 5px rgba(0,0,0,0.05);
       display:flex; justify-content:space-between; align-items:center;
+      margin-bottom:12px;
     }
     .accordion-header .arrow {
       width:0; height:0;
@@ -80,7 +81,7 @@
 </head>
 <body>
   <div class="container">
-    <h2>发票组合计算器 V7.9</h2>
+    <h2>发票组合计算器 V8.0</h2>
 
     <div class="card">
       <label>目标开票金额</label>
@@ -117,7 +118,7 @@
 
     <div class="accordion">
       <div class="accordion-header">
-        <span>删除记录（最近不限条）</span>
+        <span>删除记录（最近10条）</span>
         <div class="arrow"></div>
       </div>
       <div class="accordion-content" id="record-list"></div>
@@ -134,7 +135,7 @@
   const defaultInventory = [
     {order:'23910608992',amount:1600},
     {order:'17938227424',amount:800},
-    // …填你的完整库存…
+    // … 填入完整库存 …
   ];
   let inventory = JSON.parse(localStorage.getItem('invoiceInventory')) || defaultInventory.slice();
   let deleteRecords = JSON.parse(localStorage.getItem('deleteRecords')) || [];
@@ -146,7 +147,7 @@
     if(!h) return;
     let hist = loadHeaderHistory().filter(x=>x!==h);
     hist.unshift(h);
-    if(hist.length>10) hist.pop();          // 保留上限 10 条
+    if(hist.length>10) hist.pop();
     localStorage.setItem('headerHistory', JSON.stringify(hist));
   };
 
@@ -166,8 +167,7 @@
         localStorage.setItem('headerHistory', JSON.stringify(hist));
         renderHeaderHistory();
       };
-      wrap.appendChild(txtBtn);
-      wrap.appendChild(delBtn);
+      wrap.append(txtBtn, delBtn);
       div.appendChild(wrap);
     });
   }
@@ -175,12 +175,11 @@
   function renderDeleteRecords(){
     const list = document.getElementById('record-list');
     list.innerHTML = '';
-    deleteRecords.forEach((batch,i)=>{
+    deleteRecords.slice(0,10).forEach((batch,i)=>{
       const item = document.createElement('div');
       item.className = 'record-item';
-      // 显示“共 X 张发票，总 Y 元”
-      const sum = batch.reduce((a,b)=>a + b.sum, 0);
-      let html = `批次 ${i+1}：共 ${batch.length} 张发票，合计 ${sum} 元<br><div class="orders">`;
+      const total = batch.reduce((sum, inv) => sum + inv.sum, 0);
+      let html = `批次 ${i+1}：共 ${batch.length} 张发票，合计 ${total} 元<br><div class="orders">`;
       batch.forEach(inv=>{
         inv.orders.forEach(o=>{
           html += `订单号：${o.order}，金额：${o.amount}元<br>`;
@@ -188,7 +187,6 @@
       });
       html += '</div>';
       item.innerHTML = html;
-
       const btn = document.createElement('button');
       btn.textContent = '恢复';
       btn.className = 'btn-recover';
@@ -230,13 +228,11 @@
       const key = `${remT}|${k}|${avail.length}`;
       if(memo.has(key)) return memo.get(key);
 
-      // 最后一张：先校验总额范围，再找子集
       if(k===1){
-        if(remT<minS || remT>maxS) return null;
+        if(remT<minS||remT>maxS) return null;
         const r = subsetMinOrders(remT, avail);
         if(!r) return null;
-        const pick = r.picks.map(i=>avail[i]);
-        return [{ orders: pick, sum: remT }];
+        return [{ orders: r.picks.map(i=>avail[i]), sum: remT }];
       }
 
       for(let i=0; i<avail.length; i++){
@@ -248,7 +244,7 @@
         const rest = avail.filter(o=>!pick.includes(o));
         const sub = dfs(remT-sumPick, k-1, rest);
         if(sub){
-          const res = [{orders:pick, sum:sumPick}, ...sub];
+          const res = [{orders:pick,sum:sumPick}, ...sub];
           memo.set(key, res);
           return res;
         }
@@ -295,7 +291,6 @@
       if(!invs) return alert('无法组合出满足条件的金额');
       lastInv = invs;
 
-      // 输出
       const out = [];
       invs.forEach((inv,i)=>{
         out.push(`发票${i+1}：${inv.sum}元${inv.orders.length>1?'（相关订单合并）':''}`);
