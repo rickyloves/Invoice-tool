@@ -2,12 +2,12 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票组合计算器 V8.3</title>
+  <title>发票组合计算器 V8.6（分离库存）</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    body{background:#f5f5f5;font-family:Arial,sans-serif;color:#333;padding-bottom:80px}
-    .container{max-width:480px;margin:20px auto;padding:0 10px}
+    body{background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;color:#333;padding-bottom:84px}
+    .container{max-width:480px;margin:18px auto;padding:0 10px}
     h2{text-align:center;margin-bottom:12px;font-size:1.6rem}
     .card{background:#fff;border-radius:6px;padding:16px;margin-bottom:12px;box-shadow:0 2px 5px rgba(0,0,0,.05)}
     label{display:block;margin-top:12px;font-weight:bold}
@@ -19,30 +19,30 @@
     .two-cols{display:flex;gap:8px;margin-top:6px}
     .two-cols>div{flex:1}
     #header-history{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
-    .chip{display:inline-flex;align-items:center;border-radius:16px;padding:6px 10px;background:#ececec;color:#555}
-    .chip .x{margin-left:8px;cursor:pointer;color:#999}
-    .chip .x:hover{color:#666}
+    .hdr-item{background:#ececec;color:#555;border-radius:4px;display:flex;align-items:center;overflow:hidden}
+    .hdr-item button.txt{background:transparent;border:none;padding:6px 10px;font-size:.9rem;color:#333;cursor:pointer}
+    .hdr-item button.del{background:transparent;border:none;padding:6px;font-size:1rem;color:#999;cursor:pointer;transition:color .2s}
+    .hdr-item button.del:hover{color:#666}
     #result-output{white-space:pre-wrap;max-height:220px;overflow:auto;font-family:monospace}
     .accordion{border-radius:6px;overflow:hidden}
     .accordion-header{background:#fff;padding:12px 16px;cursor:pointer;font-weight:bold;box-shadow:0 2px 5px rgba(0,0,0,.05);display:flex;justify-content:space-between;align-items:center}
-    .arrow{width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;border-top:6px solid #666;transition:transform .25s}
+    .accordion-header .arrow{width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:7px solid #666;transition:transform .28s ease}
     .accordion-header.open .arrow{transform:rotate(180deg)}
     .accordion-content{display:none;background:#fff;padding:12px 16px;box-shadow:0 2px 5px rgba(0,0,0,.05)}
     .record-item{border-top:1px solid #eee;padding:10px 0}
     .record-item:first-child{border-top:none}
-    .record-item .orders{margin-top:6px;line-height:1.4}
-    .record-item .btn{display:inline-block;margin-top:8px;padding:6px 12px;border:none;border-radius:4px;background:#6c757d;color:#fff;cursor:pointer}
-    .footer{position:fixed;left:0;right:0;bottom:0;background:#fff;padding:8px;box-shadow:0 -2px 5px rgba(0,0,0,.05);display:flex;gap:8px}
+    .record-item .orders{margin-top:8px;line-height:1.45}
+    .record-item .btn-recover{display:block;margin:10px auto 0;padding:6px 12px;background:#6c757d;color:#fff;border:none;border-radius:4px;font-size:.9rem;cursor:pointer}
+    .footer{position:fixed;left:0;right:0;bottom:0;background:#fff;box-shadow:0 -2px 5px rgba(0,0,0,.05);padding:8px;display:flex;gap:8px}
     .footer button{flex:1;padding:12px 0;font-size:1rem;border:none;border-radius:4px;cursor:pointer}
-    .primary{background:#007bff;color:#fff}
-    .secondary{background:#6c757d;color:#fff}
-    .danger{background:#dc3545;color:#fff}
+    .primary{background:#007bff;color:#fff}.secondary{background:#6c757d;color:#fff}.danger{background:#dc3545;color:#fff}
     .hidden{display:none}
+    .tip{font-size:.9rem;color:#666;margin-top:6px}
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>发票组合计算器 V8.3</h2>
+    <h2>发票组合计算器 V8.6</h2>
 
     <div class="card">
       <label>目标开票金额</label>
@@ -70,6 +70,8 @@
       <textarea id="company-header" rows="2" placeholder="行1：公司名称
 行2：统一社会信用代码"></textarea>
       <div id="header-history"></div>
+
+      <div class="tip">库存数据来自同目录下的 <b>inventory.json</b>（共 217 条）。只要替换该文件即可更新库存。</div>
     </div>
 
     <div class="card">
@@ -79,7 +81,7 @@
 
     <div class="accordion">
       <div class="accordion-header">
-        <span>删除记录（最近 10 条）</span>
+        <span>删除记录（最近10条）</span>
         <div class="arrow"></div>
       </div>
       <div class="accordion-content" id="record-list"></div>
@@ -93,265 +95,187 @@
   </div>
 
 <script>
-/** ===== 数据持久化 ===== */
-const defaultInventory = [
-  {order:'23910608992',amount:1600},
-  {order:'17938227424',amount:800},
-  // …替换为你的完整库存…
-];
-let inventory = JSON.parse(localStorage.getItem('invoiceInventory')) || defaultInventory.slice();
-let deleteRecords = JSON.parse(localStorage.getItem('deleteRecords')) || [];
-const saveInventory = () => localStorage.setItem('invoiceInventory', JSON.stringify(inventory));
-const saveDeleteRecords = () => localStorage.setItem('deleteRecords', JSON.stringify(deleteRecords));
-const loadHeaderHistory = () => JSON.parse(localStorage.getItem('headerHistory')||'[]');
-const saveHeaderHistory = (h) => {
-  if(!h) return;
-  let arr = loadHeaderHistory().filter(x=>x!==h);
-  arr.unshift(h); if(arr.length>10) arr.pop();
-  localStorage.setItem('headerHistory', JSON.stringify(arr));
-};
+  // ====== 读取外部库存（inventory.json），失败时给出提示 ======
+  let inventory = [];
+  let deleteRecords = JSON.parse(localStorage.getItem('deleteRecords')||'[]');
 
-/** ===== UI 渲染 ===== */
-function renderHeaderHistory(){
-  const box = document.getElementById('header-history');
-  box.innerHTML = '';
-  loadHeaderHistory().forEach((h,i)=>{
-    const chip = document.createElement('div'); chip.className='chip';
-    const txt = document.createElement('span'); txt.textContent=h;
-    txt.style.cursor='pointer'; txt.onclick=()=>document.getElementById('company-header').value=h;
-    const x = document.createElement('span'); x.textContent='✕'; x.className='x';
-    x.onclick=()=>{ let arr=loadHeaderHistory(); arr.splice(i,1);
-      localStorage.setItem('headerHistory', JSON.stringify(arr)); renderHeaderHistory(); };
-    chip.appendChild(txt); chip.appendChild(x); box.appendChild(chip);
-  });
-}
-
-function renderDeleteRecords(){
-  const list = document.getElementById('record-list');
-  list.innerHTML = '';
-  const recent = deleteRecords.slice(0,10); // 仅显示最近 10 条
-  recent.forEach((batch,i)=>{
-    const item = document.createElement('div'); item.className='record-item';
-    const invCnt = batch.length;
-    const total = batch.reduce((s,inv)=>s+inv.sum,0);
-    let html = `批次 ${i+1}：共 ${invCnt} 张发票，合计 ${total} 元<br><div class="orders">`;
-    batch.forEach(inv=>{
-      inv.orders.forEach(o=>{
-        html += `订单号：${o.order}，金额：${o.amount}元<br>`;
-      });
+  function makeKey(o){ return `${o.order}|${Number(o.amount)}`; }
+  function withUid(arr){ return arr.map((o,idx)=>({ ...o, __uid:`uid_${idx}_${makeKey(o)}` })); }
+  function normalizeInventory(raw){
+    const map = new Map();
+    raw.forEach(o=>{
+      const k = makeKey(o);
+      if(!map.has(k)){ map.set(k, {order:String(o.order), amount:Number(o.amount)}) }
     });
-    html += '</div>';
-    item.innerHTML = html;
-    const btn = document.createElement('button'); btn.className='btn'; btn.textContent='恢复';
-    btn.onclick = ()=>{
-      const rec = deleteRecords.splice(i,1)[0];
-      rec.forEach(inv=>inv.orders.forEach(o=>inventory.push(o)));
-      saveDeleteRecords(); saveInventory(); renderDeleteRecords();
+    return Array.from(map.values());
+  }
+  const saveInventory = ()=>localStorage.setItem('invoiceInventory', JSON.stringify(inventory));
+  const saveDeleteRecords = ()=>localStorage.setItem('deleteRecords', JSON.stringify(deleteRecords));
+  const loadHeaderHistory = ()=>JSON.parse(localStorage.getItem('headerHistory')||'[]');
+  const saveHeaderHistory = h=>{
+    if(!h) return; let arr = loadHeaderHistory().filter(x=>x!==h);
+    arr.unshift(h); if(arr.length>10) arr.pop();
+    localStorage.setItem('headerHistory', JSON.stringify(arr));
+  };
+
+  async function loadInventory(){
+    try{
+      const res = await fetch('inventory.json', {cache:'no-store'});
+      if(!res.ok) throw new Error('fetch failed');
+      const data = await res.json();
+      // 优先使用本地已持久化库存（你确认删除后的状态），仅首次用外部文件初始化
+      const local = JSON.parse(localStorage.getItem('invoiceInventory')||'null');
+      inventory = normalizeInventory(local || data);
+      saveInventory(); // 确保持久化
+    }catch(e){
+      alert('未找到 inventory.json 或读取失败，请将 inventory.json 与 index.html 放在同一目录。');
+      inventory = normalizeInventory(JSON.parse(localStorage.getItem('invoiceInventory')||'[]'));
+    }
+  }
+
+  // ====== 抬头历史 & 删除记录渲染 ======
+  function renderHeaderHistory(){
+    const div=document.getElementById('header-history'); div.innerHTML='';
+    loadHeaderHistory().forEach((h,i)=>{
+      const wrap=document.createElement('div'), txt=document.createElement('button'), del=document.createElement('button');
+      wrap.className='hdr-item';
+      txt.className='txt'; txt.textContent=h; txt.onclick=()=>document.getElementById('company-header').value=h;
+      del.className='del'; del.textContent='✕'; del.onclick=()=>{ let a=loadHeaderHistory(); a.splice(i,1); localStorage.setItem('headerHistory', JSON.stringify(a)); renderHeaderHistory(); };
+      wrap.appendChild(txt); wrap.appendChild(del); div.appendChild(wrap);
+    });
+  }
+
+  function renderDeleteRecords(){
+    const list=document.getElementById('record-list'); list.innerHTML='';
+    deleteRecords.slice(0,10).forEach((batch,i)=>{
+      const invoiceCount=batch.length;
+      const total=batch.reduce((s,inv)=>s+inv.sum,0);
+      const item=document.createElement('div'); item.className='record-item';
+      let html=`批次 ${i+1}：共 ${invoiceCount} 张发票，合计 ${total} 元<br><div class="orders">`;
+      batch.forEach(inv=>inv.orders.forEach(o=>{ html+=`订单号：${o.order}，金额：${o.amount}元<br>`; }));
+      html+='</div>'; item.innerHTML=html;
+      const btn=document.createElement('button'); btn.className='record-item btn-recover'; btn.textContent='恢复';
+      btn.onclick=()=>{
+        const rec=deleteRecords.splice(i,1)[0];
+        const set=new Set(inventory.map(makeKey));
+        rec.forEach(inv=>inv.orders.forEach(o=>{ const k=makeKey(o); if(!set.has(k)){ set.add(k); inventory.push({order:o.order,amount:o.amount}); }}));
+        inventory=normalizeInventory(inventory);
+        saveDeleteRecords(); saveInventory(); renderDeleteRecords();
+      };
+      item.appendChild(btn); list.appendChild(item);
+    });
+  }
+
+  // ====== 子集最少订单（0/1） ======
+  function subsetMinOrders(target, arr){
+    const dp=Array(target+1).fill(null); dp[0]={cnt:0,picks:[]};
+    for(let i=0;i<arr.length;i++){
+      const a=arr[i].amount|0;
+      for(let s=target;s>=a;s--){
+        if(dp[s-a] && (!dp[s] || dp[s-a].cnt+1 < dp[s].cnt)){
+          dp[s]={cnt:dp[s-a].cnt+1,picks:dp[s-a].picks.concat(i)};
+        }
+      }
+    }
+    return dp[target];
+  }
+
+  // ====== 组合（全局最少订单 + 固定张数；防重复使用） ======
+  function fewInvoices(target, minS, maxS, maxSame, invoiceCount){
+    const base = withUid(normalizeInventory(inventory));
+    const usableAll = base.filter(o => o.amount >= (minS||0) && o.amount <= (maxS||target));
+    if(!usableAll.length) return null;
+
+    if(!invoiceCount){
+      const rec=subsetMinOrders(target, usableAll);
+      if(!rec) return null;
+      const pick=rec.picks.map(i=>usableAll[i]);
+      return [{orders: pick.map(x=>({order:x.order,amount:x.amount})), sum: target}];
+    }
+
+    const memo=new Map();
+    function dfs(remT, k, avail){
+      const key=remT+'|'+k+'|'+avail.length;
+      if(memo.has(key)) return memo.get(key);
+      if(k===1){
+        const r=subsetMinOrders(remT, avail);
+        if(!r) return null;
+        const pick=r.picks.map(i=>avail[i]);
+        const res=[{orders: pick.map(x=>({order:x.order,amount:x.amount})), sum: remT}];
+        memo.set(key,res); return res;
+      }
+      for(let i=0;i<avail.length;i++){
+        const tail=avail.slice(i);
+        const r=subsetMinOrders(tail[i].amount, tail);
+        if(!r) continue;
+        const pick=r.picks.map(j=>tail[j]);
+        const sumPick=pick.reduce((a,o)=>a+o.amount,0);
+        if((minS && sumPick<minS) || (maxS && sumPick>maxS)) continue;
+
+        const used=new Set(pick.map(x=>x.__uid));
+        const rest=avail.filter(x=>!used.has(x.__uid));
+        const sub=dfs(remT-sumPick, k-1, rest);
+        if(sub){ const res=[{orders: pick.map(x=>({order:x.order,amount:x.amount})), sum: sumPick}, ...sub]; memo.set(key,res); return res; }
+      }
+      memo.set(key,null); return null;
+    }
+    return dfs(target, invoiceCount, usableAll);
+  }
+
+  // ====== 页面逻辑 ======
+  document.addEventListener('DOMContentLoaded', async ()=>{
+    await loadInventory();           // 先加载库存
+    renderHeaderHistory();           // 渲染抬头历史
+    renderDeleteRecords();           // 渲染删除记录
+
+    const accH=document.querySelector('.accordion-header');
+    const accC=document.querySelector('.accordion-content');
+    accH.onclick=()=>{ const open=accC.style.display==='block'; accC.style.display=open?'none':'block'; accH.classList.toggle('open',!open); };
+
+    let lastInv=null;
+
+    document.getElementById('combine-btn').onclick=()=>{
+      const tgt=+document.getElementById('target-input').value;
+      if(!tgt) return alert('请输入目标金额');
+      const minS=+document.getElementById('min-single').value||0;
+      const maxS=+document.getElementById('max-single').value||tgt;
+      if(minS>maxS) return alert('下限不可大于上限');
+      const msc=+document.getElementById('max-same-count').value||Infinity;
+      const ic=+document.getElementById('invoice-count').value||0;
+      const header=document.getElementById('company-header').value.trim();
+      saveHeaderHistory(header); renderHeaderHistory();
+
+      const invs=fewInvoices(tgt,minS,maxS,msc,ic);
+      if(!invs) return alert('无法组合出满足条件的金额');
+      lastInv=invs;
+
+      const out=[];
+      invs.forEach((inv,i)=>{
+        out.push(`发票${i+1}：${inv.sum}元${inv.orders.length>1?'（相关订单合并）':''}`);
+        inv.orders.forEach(o=> out.push(`订单号：${o.order}，金额：${o.amount}元`));
+        out.push('');
+      });
+      if(header) out.push(header,'');
+      out.push('不需要备注','568881753@qq.com');
+      document.getElementById('result-output').textContent=out.join('\n');
+      document.getElementById('confirm-delete-btn').classList.remove('hidden');
     };
-    item.appendChild(btn); list.appendChild(item);
+
+    document.getElementById('confirm-delete-btn').onclick=()=>{
+      if(!lastInv) return;
+      deleteRecords.unshift(lastInv);
+      const removeSet=new Set();
+      lastInv.forEach(inv=>inv.orders.forEach(o=>removeSet.add(makeKey(o))));
+      inventory = inventory.filter(o=>!removeSet.has(makeKey(o)));
+      saveDeleteRecords(); saveInventory(); renderDeleteRecords();
+      document.getElementById('confirm-delete-btn').classList.add('hidden');
+    };
+
+    document.getElementById('copy-btn').onclick=()=>{
+      navigator.clipboard.writeText(document.getElementById('result-output').textContent);
+      alert('结果已复制');
+    };
   });
-}
-
-/** ===== DP 工具：计算到 cap 的最少订单 dp，并可回溯 ===== */
-function buildDP_MinOrders(arr, cap){
-  const dp = Array(cap+1).fill(null);
-  dp[0] = {cnt:0, prev:-1, idx:-1};
-  for(let i=0;i<arr.length;i++){
-    const a = arr[i].amount|0;
-    for(let s=cap; s>=a; s--){
-      if(dp[s-a] && (!dp[s] || dp[s-a].cnt+1 < dp[s].cnt)){
-        dp[s] = {cnt: dp[s-a].cnt+1, prev: s-a, idx:i};
-      }
-    }
-  }
-  return dp;
-}
-function backtrackPicks(dp, s, avail){
-  const picks = []; let cur = s;
-  while(cur>0){
-    const node = dp[cur]; if(!node) return null;
-    picks.push(node.idx); cur = node.prev;
-  }
-  return picks.map(i=>avail[i]);
-}
-
-/** ===== 选择 [low,high] 区间内“最少订单”的一张发票组合 ===== */
-function bestOneInvoice(avail, low, high){
-  if(high<=0) return null;
-  const dp = buildDP_MinOrders(avail, high);
-  // 取区间内“订单数最少，其次金额更大”的方案
-  let bestS = -1, bestCnt = Infinity;
-  for(let s=Math.max(0,low); s<=high; s++){
-    const node = dp[s]; if(!node) continue;
-    if(node.cnt < bestCnt || (node.cnt===bestCnt && s>bestS)){
-      bestCnt = node.cnt; bestS = s;
-    }
-  }
-  if(bestS<low) return null;
-  const picks = backtrackPicks(dp, bestS, avail);
-  return {sum: bestS, picks};
-}
-
-/** ===== 主求解：few + 先决条件（范围、相同金额上限、张数） ===== */
-function solveFew(target, minS, maxS, maxSame, invoiceCount){
-  // 注意：不再按“范围”去过滤订单！范围只约束“每张发票合并金额”
-  const usable = inventory.slice(); // 全量订单
-
-  // 未设置范围 & 未设置张数 => 单张总额：用最少订单直接凑 target
-  if(!(minS>0) && !(maxS>0) && !invoiceCount){
-    const dp = buildDP_MinOrders(usable, target);
-    if(!dp[target]) return null;
-    return [{sum:target, orders: backtrackPicks(dp, target, usable)}];
-  }
-
-  const sameLimit = isFinite(maxSame) && maxSame>0 ? maxSame : Infinity;
-  const countMap = new Map(); // 发票金额 -> 已使用张数
-
-  function dfs(remT, k, avail){
-    // k==0
-    if(k===0) return remT===0 ? [] : null;
-
-    // 可行性剪枝
-    const minNeed = (minS>0?minS:0)*k;
-    const maxAllow = (maxS>0?maxS:remT)*k;
-    if(remT < minNeed || remT > maxAllow) return null;
-
-    // 最后一张：必须恰好等于 remT 且满足范围/相同金额
-    if(k===1){
-      const s = remT;
-      if((minS>0 && s<minS) || (maxS>0 && s>maxS)) return null;
-      if(countMap.get(s)||0 >= sameLimit) return null;
-      const dp = buildDP_MinOrders(avail, s);
-      if(!dp[s]) return null;
-      const pick = backtrackPicks(dp, s, avail);
-      return [{sum:s, orders:pick}];
-    }
-
-    // 本张的可行区间：确保剩余 k-1 张仍有可行空间
-    const hi = Math.min(maxS>0?maxS:remT, remT - (k-1)*(minS>0?minS:0));
-    const lo = Math.max(minS>0?minS:0, remT - (k-1)*(maxS>0?maxS:remT));
-    if(hi<lo) return null;
-
-    // 先求出一张“订单数最少”的候选，再根据订单数从少到多尝试多个 s
-    const dp = buildDP_MinOrders(avail, hi);
-    // 收集区间内所有可达 s
-    const candidates = [];
-    for(let s=lo; s<=hi; s++){
-      const node = dp[s]; if(!node) continue;
-      if((countMap.get(s)||0) < sameLimit){
-        candidates.push({s, cnt:node.cnt});
-      }
-    }
-    if(!candidates.length) return null;
-    // 优先“订单数更少”，其次“金额更大”（让剩余更容易）
-    candidates.sort((a,b)=> a.cnt-b.cnt || b.s-a.s);
-
-    for(const cand of candidates){
-      const pick = backtrackPicks(dp, cand.s, avail);
-      if(!pick) continue;
-      // 从可用订单中移除
-      const rest = avail.slice();
-      pick.forEach(o=>{
-        const idx = rest.findIndex(x=>x.order===o.order && x.amount===o.amount);
-        if(idx>-1) rest.splice(idx,1);
-      });
-      // 相同金额计数
-      countMap.set(cand.s, (countMap.get(cand.s)||0)+1);
-      const sub = dfs(remT - cand.s, k-1, rest);
-      if(sub){
-        return [{sum:cand.s, orders:pick}, ...sub];
-      }
-      // 回溯
-      countMap.set(cand.s, countMap.get(cand.s)-1);
-    }
-    return null;
-  }
-
-  // 确定要尝试的张数 k
-  const tryK = [];
-  if(invoiceCount && invoiceCount>0){
-    tryK.push(invoiceCount|0);
-  }else{
-    if(!(minS>0) || !(maxS>0)){
-      // 只有一侧或没有范围：从 1 张开始往上试到一个合理上界
-      for(let k=1;k<=20;k++) tryK.push(k);
-    }else{
-      const kMin = Math.ceil(target / maxS);
-      const kMax = Math.floor(target / minS);
-      for(let k=kMin;k<=Math.max(kMin,kMax);k++) tryK.push(k);
-    }
-  }
-
-  for(const k of tryK){
-    const res = dfs(target, k, usable);
-    if(res) return res;
-  }
-  return null;
-}
-
-/** ===== 事件绑定 ===== */
-document.addEventListener('DOMContentLoaded', ()=>{
-  renderHeaderHistory();
-  renderDeleteRecords();
-
-  const accHeader = document.querySelector('.accordion-header');
-  const accCont = document.querySelector('.accordion-content');
-  accHeader.onclick = ()=>{
-    const open = accCont.style.display==='block';
-    accCont.style.display = open?'none':'block';
-    accHeader.classList.toggle('open', !open);
-  };
-
-  let lastInv = null;
-
-  document.getElementById('combine-btn').onclick = ()=>{
-    const tgt = +document.getElementById('target-input').value;
-    if(!tgt) return alert('请输入目标金额');
-
-    const minS = +document.getElementById('min-single').value || 0;
-    const maxS = +document.getElementById('max-single').value || 0;
-    if(minS>0 && maxS>0 && minS>maxS) return alert('下限不可大于上限');
-
-    const msc = +document.getElementById('max-same-count').value || Infinity;
-    const ic  = +document.getElementById('invoice-count').value || 0;
-
-    const header = document.getElementById('company-header').value.trim();
-    saveHeaderHistory(header); renderHeaderHistory();
-
-    const invs = solveFew(tgt, minS, maxS, msc, ic);
-    if(!invs) return alert('无法组合出满足条件的金额');
-
-    lastInv = invs;
-    const lines = [];
-    invs.forEach((inv,i)=>{
-      lines.push(`发票${i+1}：${inv.sum}元${inv.orders.length>1?'（相关订单合并）':''}`);
-      inv.orders.forEach(o=>lines.push(`订单号：${o.order}，金额：${o.amount}元`));
-      lines.push('');
-    });
-    if(header) lines.push(header,'');
-    lines.push('不需要备注','568881753@qq.com');
-    document.getElementById('result-output').textContent = lines.join('\n');
-    document.getElementById('confirm-delete-btn').classList.remove('hidden');
-  };
-
-  document.getElementById('confirm-delete-btn').onclick = ()=>{
-    if(!lastInv) return;
-    deleteRecords.unshift(lastInv);
-    // 只显示最近 10 条，但数据不裁剪
-    saveDeleteRecords();
-    lastInv.forEach(inv=>inv.orders.forEach(o=>{
-      const idx = inventory.findIndex(x=>x.order===o.order && x.amount===o.amount);
-      if(idx>-1) inventory.splice(idx,1);
-    }));
-    saveInventory(); renderDeleteRecords();
-    document.getElementById('confirm-delete-btn').classList.add('hidden');
-  };
-
-  document.getElementById('copy-btn').onclick = ()=>{
-    navigator.clipboard.writeText(document.getElementById('result-output').textContent);
-    alert('结果已复制');
-  };
-});
 </script>
 </body>
 </html>
