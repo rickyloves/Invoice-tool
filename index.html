@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票组合计算器 V8.6（分离库存）</title>
+  <title>发票组合计算器 V8.7（分离库存）</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
@@ -42,7 +42,7 @@
 </head>
 <body>
   <div class="container">
-    <h2>发票组合计算器 V8.6</h2>
+    <h2>发票组合计算器 V8.7</h2>
 
     <div class="card">
       <label>目标开票金额</label>
@@ -71,7 +71,7 @@
 行2：统一社会信用代码"></textarea>
       <div id="header-history"></div>
 
-      <div class="tip">库存数据来自同目录下的 <b>inventory.json</b>（共 217 条）。只要替换该文件即可更新库存。</div>
+      <div class="tip">库存数据来自同目录下的 <b>inventory.json</b>。替换该文件即可更新库存。</div>
     </div>
 
     <div class="card">
@@ -95,15 +95,14 @@
   </div>
 
 <script>
-  // ====== 读取外部库存（inventory.json），失败时给出提示 ======
+  // ====== 读取外部库存（inventory.json） ======
   let inventory = [];
   let deleteRecords = JSON.parse(localStorage.getItem('deleteRecords')||'[]');
 
   function makeKey(o){ return `${o.order}|${Number(o.amount)}`; }
-  function withUid(arr){ return arr.map((o,idx)=>({ ...o, __uid:`uid_${idx}_${makeKey(o)}` })); }
   function normalizeInventory(raw){
     const map = new Map();
-    raw.forEach(o=>{
+    (raw||[]).forEach(o=>{
       const k = makeKey(o);
       if(!map.has(k)){ map.set(k, {order:String(o.order), amount:Number(o.amount)}) }
     });
@@ -123,28 +122,28 @@
       const res = await fetch('inventory.json', {cache:'no-store'});
       if(!res.ok) throw new Error('fetch failed');
       const data = await res.json();
-      // 优先使用本地已持久化库存（你确认删除后的状态），仅首次用外部文件初始化
+      // 优先用本地（删除后）的库存；没有则用外部文件初始化
       const local = JSON.parse(localStorage.getItem('invoiceInventory')||'null');
       inventory = normalizeInventory(local || data);
-      saveInventory(); // 确保持久化
+      saveInventory();
     }catch(e){
-      alert('未找到 inventory.json 或读取失败，请将 inventory.json 与 index.html 放在同一目录。');
+      alert('未找到 inventory.json 或读取失败，请将其与 index.html 放在同一目录。');
       inventory = normalizeInventory(JSON.parse(localStorage.getItem('invoiceInventory')||'[]'));
     }
   }
 
-  // ====== 抬头历史 & 删除记录渲染 ======
+  // ====== UI 渲染 ======
   function renderHeaderHistory(){
     const div=document.getElementById('header-history'); div.innerHTML='';
     loadHeaderHistory().forEach((h,i)=>{
-      const wrap=document.createElement('div'), txt=document.createElement('button'), del=document.createElement('button');
-      wrap.className='hdr-item';
-      txt.className='txt'; txt.textContent=h; txt.onclick=()=>document.getElementById('company-header').value=h;
-      del.className='del'; del.textContent='✕'; del.onclick=()=>{ let a=loadHeaderHistory(); a.splice(i,1); localStorage.setItem('headerHistory', JSON.stringify(a)); renderHeaderHistory(); };
+      const wrap=document.createElement('div'); wrap.className='hdr-item';
+      const txt=document.createElement('button'); txt.className='txt'; txt.textContent=h;
+      txt.onclick=()=>document.getElementById('company-header').value=h;
+      const del=document.createElement('button'); del.className='del'; del.textContent='✕';
+      del.onclick=()=>{ let a=loadHeaderHistory(); a.splice(i,1); localStorage.setItem('headerHistory', JSON.stringify(a)); renderHeaderHistory(); };
       wrap.appendChild(txt); wrap.appendChild(del); div.appendChild(wrap);
     });
   }
-
   function renderDeleteRecords(){
     const list=document.getElementById('record-list'); list.innerHTML='';
     deleteRecords.slice(0,10).forEach((batch,i)=>{
@@ -166,7 +165,7 @@
     });
   }
 
-  // ====== 子集最少订单（0/1） ======
+  // ====== 基础子集：用最少订单拼出指定和（0/1） ======
   function subsetMinOrders(target, arr){
     const dp=Array(target+1).fill(null); dp[0]={cnt:0,picks:[]};
     for(let i=0;i<arr.length;i++){
@@ -180,53 +179,103 @@
     return dp[target];
   }
 
-  // ====== 组合（全局最少订单 + 固定张数；防重复使用） ======
+  // 校验“相同金额发票张数上限”（针对发票金额）
+  function checkSameInvoiceCap(invoices, maxSame){
+    if(!isFinite(maxSame)) return true;
+    const cnt = new Map();
+    for(const inv of invoices){
+      const sum = inv.sum|0;
+      cnt.set(sum, (cnt.get(sum)||0)+1);
+      if(cnt.get(sum) > maxSame) return false;
+    }
+    return true;
+  }
+
+  // ====== 主搜索：全局最少订单；支持：固定张数 / 自动张数（在范围内） ======
   function fewInvoices(target, minS, maxS, maxSame, invoiceCount){
-    const base = withUid(normalizeInventory(inventory));
-    const usableAll = base.filter(o => o.amount >= (minS||0) && o.amount <= (maxS||target));
+    const base = normalizeInventory(inventory);
+    const usableAll = base; // 订单可先不过滤范围；范围用于“发票金额”的限制
+
     if(!usableAll.length) return null;
 
-    if(!invoiceCount){
+    // 固定张数：严格拆成 invoiceCount 张，每张 sum 在 [minS,maxS]
+    function solveWithK(k){
+      const arr = usableAll.map((o,idx)=>({...o, __uid: `u${idx}`})); // 加 uid 防重复
+      const memo=new Map();
+
+      function dfs(remT, kk, avail){
+        const key=remT+'|'+kk+'|'+avail.length;
+        if(memo.has(key)) return memo.get(key);
+
+        if(kk===1){
+          // 最后一张直接子集求和 remT，并校验范围
+          const r=subsetMinOrders(remT, avail);
+          if(!r) return null;
+          const pick=r.picks.map(i=>avail[i]);
+          const sum=remT;
+          if((minS && sum<minS) || (maxS && sum>maxS)) return null;
+          return [{orders: pick.map(x=>({order:x.order,amount:x.amount})), sum}];
+        }
+
+        // 尝试从大到小挑一个目标 sum1（用子集求和），剩余递归 kk-1
+        // 这里用每个元素的金额作为“锚点”生成若干尝试的 sum1
+        for(let i=0;i<avail.length;i++){
+          const tail=avail.slice(i);
+          const r=subsetMinOrders(tail[i].amount, tail);
+          if(!r) continue;
+          const pick=r.picks.map(j=>tail[j]);
+          const sumPick=pick.reduce((a,o)=>a+o.amount,0);
+          if((minS && sumPick<minS) || (maxS && sumPick>maxS)) continue;
+
+          const usedUid=new Set(pick.map(x=>x.__uid));
+          const rest=avail.filter(x=>!usedUid.has(x.__uid));
+          const sub=dfs(remT-sumPick, kk-1, rest);
+          if(sub){
+            const res=[{orders: pick.map(x=>({order:x.order,amount:x.amount})), sum: sumPick}, ...sub];
+            // 校验“相同发票金额”上限
+            if(checkSameInvoiceCap(res, maxSame)){ memo.set(key,res); return res; }
+          }
+        }
+        memo.set(key,null); return null;
+      }
+
+      const ans=dfs(target, k, arr);
+      return ans && checkSameInvoiceCap(ans, maxSame) ? ans : null;
+    }
+
+    // 情况 A：明确填写了“发票张数”
+    if(invoiceCount){
+      return solveWithK(invoiceCount);
+    }
+
+    // 情况 B：未填写“发票张数”
+    // 1) 若没有“范围”限制，则默认拼成 1 张（维持旧逻辑）
+    const noRange = (!minS && !maxS) || (maxS>=target && (!minS || minS<=target));
+    if(noRange){
       const rec=subsetMinOrders(target, usableAll);
       if(!rec) return null;
       const pick=rec.picks.map(i=>usableAll[i]);
-      return [{orders: pick.map(x=>({order:x.order,amount:x.amount})), sum: target}];
+      const one=[{orders: pick.map(x=>({order:x.order,amount:x.amount})), sum: target}];
+      return checkSameInvoiceCap(one, maxSame) ? one : null;
     }
 
-    const memo=new Map();
-    function dfs(remT, k, avail){
-      const key=remT+'|'+k+'|'+avail.length;
-      if(memo.has(key)) return memo.get(key);
-      if(k===1){
-        const r=subsetMinOrders(remT, avail);
-        if(!r) return null;
-        const pick=r.picks.map(i=>avail[i]);
-        const res=[{orders: pick.map(x=>({order:x.order,amount:x.amount})), sum: remT}];
-        memo.set(key,res); return res;
-      }
-      for(let i=0;i<avail.length;i++){
-        const tail=avail.slice(i);
-        const r=subsetMinOrders(tail[i].amount, tail);
-        if(!r) continue;
-        const pick=r.picks.map(j=>tail[j]);
-        const sumPick=pick.reduce((a,o)=>a+o.amount,0);
-        if((minS && sumPick<minS) || (maxS && sumPick>maxS)) continue;
-
-        const used=new Set(pick.map(x=>x.__uid));
-        const rest=avail.filter(x=>!used.has(x.__uid));
-        const sub=dfs(remT-sumPick, k-1, rest);
-        if(sub){ const res=[{orders: pick.map(x=>({order:x.order,amount:x.amount})), sum: sumPick}, ...sub]; memo.set(key,res); return res; }
-      }
-      memo.set(key,null); return null;
+    // 2) 存在“范围”限制：自动在可行张数区间内搜索（从小到大，尽量少张；且内层 DP 已经保证最少订单）
+    const minPer = minS || 1;
+    const maxPer = maxS || target; // 若没填上限就按 target 处理
+    const kMin = Math.ceil(target / maxPer);
+    const kMax = Math.floor(target / Math.max(1, minPer));
+    for(let k = kMin; k <= kMax; k++){
+      const ans = solveWithK(k);
+      if(ans) return ans;
     }
-    return dfs(target, invoiceCount, usableAll);
+    return null;
   }
 
-  // ====== 页面逻辑 ======
+  // ====== 页面入口 ======
   document.addEventListener('DOMContentLoaded', async ()=>{
-    await loadInventory();           // 先加载库存
-    renderHeaderHistory();           // 渲染抬头历史
-    renderDeleteRecords();           // 渲染删除记录
+    await loadInventory();
+    renderHeaderHistory();
+    renderDeleteRecords();
 
     const accH=document.querySelector('.accordion-header');
     const accC=document.querySelector('.accordion-content');
@@ -238,10 +287,10 @@
       const tgt=+document.getElementById('target-input').value;
       if(!tgt) return alert('请输入目标金额');
       const minS=+document.getElementById('min-single').value||0;
-      const maxS=+document.getElementById('max-single').value||tgt;
-      if(minS>maxS) return alert('下限不可大于上限');
+      const maxS=+document.getElementById('max-single').value||0;
+      if(minS && maxS && minS>maxS) return alert('下限不可大于上限');
       const msc=+document.getElementById('max-same-count').value||Infinity;
-      const ic=+document.getElementById('invoice-count').value||0;
+      const ic =+document.getElementById('invoice-count').value||0;
       const header=document.getElementById('company-header').value.trim();
       saveHeaderHistory(header); renderHeaderHistory();
 
@@ -264,8 +313,8 @@
     document.getElementById('confirm-delete-btn').onclick=()=>{
       if(!lastInv) return;
       deleteRecords.unshift(lastInv);
-      const removeSet=new Set();
-      lastInv.forEach(inv=>inv.orders.forEach(o=>removeSet.add(makeKey(o))));
+      // 从库存移除已用订单
+      const removeSet=new Set(lastInv.flatMap(inv=>inv.orders.map(makeKey)));
       inventory = inventory.filter(o=>!removeSet.has(makeKey(o)));
       saveDeleteRecords(); saveInventory(); renderDeleteRecords();
       document.getElementById('confirm-delete-btn').classList.add('hidden');
