@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票组合计算器 V8.9（分离库存）</title>
+  <title>发票组合计算器 V8.10（分离库存）</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
@@ -42,7 +42,7 @@
 </head>
 <body>
   <div class="container">
-    <h2>发票组合计算器 V8.9</h2>
+    <h2>发票组合计算器 V8.10</h2>
 
     <div class="card">
       <label>目标开票金额</label>
@@ -178,7 +178,7 @@
     return dp[target];
   }
 
-  // 最佳子集（区间 [lo,hi]）：优先金额大，其次订单少；返回 {sum, picks}
+  // 区间最佳子集（[lo,hi]），优先金额大，其次订单少
   function bestSubsetInRange(avail, lo, hi){
     const maxSum = Math.min(hi, avail.reduce((a,o)=>a+o.amount,0));
     const dp=Array(maxSum+1).fill(null); dp[0]={cnt:0,picks:[]};
@@ -196,16 +196,8 @@
     return null;
   }
 
-  // 校验“相同发票金额张数上限”（针对发票金额）
-  function okSameCap(sum, capMap, maxSame){
-    if(!isFinite(maxSame)) return true;
-    const cur = capMap.get(sum)||0;
-    return cur < maxSame;
-  }
-
-  // —— 新增：把已选订单拆成多张（满足单张范围 & 相同金额上限）——
-  function splitSelectedOrdersIntoInvoices(selectedOrders, minS, maxS, maxSame){
-    // 若没填范围，直接合并成 1 张
+  // —— 新：带“相同发票金额张数上限”的回溯拆票器 ——
+  function splitWithCapBacktrack(selectedOrders, minS, maxS, maxSame){
     if(!(minS>0) && !(maxS>0)){
       const total = selectedOrders.reduce((a,o)=>a+o.amount,0);
       return [{ sum: total, orders: selectedOrders.slice() }];
@@ -214,49 +206,64 @@
     const hi = (maxS>0)?maxS:selectedOrders.reduce((a,o)=>a+o.amount,0);
 
     let avail = selectedOrders.slice();
-    const out = [];
     const capMap = new Map(); // 发票金额 -> 已出现次数
+    const keyOf = o => `${o.order}|${o.amount}`;
 
-    while(avail.length){
-      // 先尝试从 hi 往 lo 找最大可行 sum，且不触发上限
-      let found=null;
+    // 生成候选金额（从大到小），最多取 N 个，且不超过上限
+    function genCandidates(av, limit=8){
+      const cands=[];
       for(let s=hi; s>=lo; s--){
-        if(!okSameCap(s, capMap, maxSame)) continue;
-        const probe = bestSubsetInRange(avail, s, s);
-        if(probe){ found=probe; break; }
+        if(isFinite(maxSame) && (capMap.get(s)||0) >= maxSame) continue;
+        const probe = bestSubsetInRange(av, s, s);
+        if(probe){ cands.push(probe); if(cands.length>=limit) break; }
       }
-      // 如果找不到 exact sum，再退而求其次在区间内找最大的
-      if(!found){
-        const probe=bestSubsetInRange(avail, lo, hi);
-        if(!probe) return null; // 无法拆包
-        // 如果这个 sum 触发了上限，则继续往下找
-        if(!okSameCap(probe.sum, capMap, maxSame)){
-          let alt=null;
-          for(let s=probe.sum-1; s>=lo; s--){
-            if(!okSameCap(s, capMap, maxSame)) continue;
-            const t=bestSubsetInRange(avail, s, s);
-            if(t){ alt=t; break; }
-          }
-          if(!alt) return null;
-          found = alt;
-        }else{
-          found = probe;
-        }
+      // 如果没有 exact 候选，再给一个“区间最大”的兜底
+      if(cands.length===0){
+        const p = bestSubsetInRange(av, lo, hi);
+        if(p && (!isFinite(maxSame) || (capMap.get(p.sum)||0) < maxSame)) cands.push(p);
       }
-
-      const pick = found.picks.map(i=>avail[i]);
-      const sum = found.sum|0;
-      out.push({ sum, orders: pick });
-      capMap.set(sum, (capMap.get(sum)||0)+1);
-
-      // 从可用集中删除已用订单
-      const used = new Set(pick.map(o=>`${o.order}|${o.amount}`));
-      avail = avail.filter(o=>!used.has(`${o.order}|${o.amount}`));
+      return cands;
     }
-    return out;
+
+    const memo = new Set(); // 备忘避免重复状态
+    function sig(av){
+      // 只做粗粒度签名：金额直方图 + 上限计数
+      const hist = new Map();
+      av.forEach(o=>hist.set(o.amount,(hist.get(o.amount)||0)+1));
+      const hm = Array.from(hist.entries()).sort((a,b)=>a[0]-b[0]).map(([k,v])=>k+':'+v).join(',');
+      const cm = Array.from(capMap.entries()).sort((a,b)=>a[0]-b[0]).map(([k,v])=>k+':'+v).join(',');
+      return hm+'|'+cm;
+    }
+
+    function dfs(av){
+      if(av.length===0) return [];
+      const signature = sig(av);
+      if(memo.has(signature)) return null;
+
+      const candList = genCandidates(av, 8);
+      for(const cand of candList){
+        const pick = cand.picks.map(i=>av[i]);
+        const used = new Set(pick.map(keyOf));
+        const rest = av.filter(o=>!used.has(keyOf(o)));
+
+        capMap.set(cand.sum, (capMap.get(cand.sum)||0)+1);
+        const sub = dfs(rest);
+        if(sub){
+          return [{ sum: cand.sum, orders: pick }, ...sub];
+        }
+        // 回溯
+        capMap.set(cand.sum, capMap.get(cand.sum)-1);
+        if(capMap.get(cand.sum)===0) capMap.delete(cand.sum);
+      }
+
+      memo.add(signature);
+      return null;
+    }
+
+    return dfs(avail);
   }
 
-  // ====== 固定“发票张数”的求解（沿用 8.7 逻辑） ======
+  // 固定“发票张数”的拆分（沿用 8.7 逻辑）
   function solveWithInvoiceCount(target, minS, maxS){
     const base = inventory.map((o,idx)=>({...o, __uid:`u${idx}`}));
     function bestSubsetInRangeEx(avail, lo, hi){
@@ -300,7 +307,6 @@
         const res=[{orders: pick.map(x=>({order:x.order,amount:x.amount})), sum}];
         memo.set(key,res); return res;
       }
-      // 先拿一个尽量大的合法区间内的子集，再递归
       const r1 = bestSubsetInRangeEx(avail, (minS||1), Math.min(maxS||remT, remT));
       if(!r1){ memo.set(key,null); return null; }
       const trySums=[];
@@ -321,24 +327,23 @@
     return { dfs, base };
   }
 
-  // ====== 主入口：默认全局最少订单；若填范围且没填张数 -> 拆包器；若填张数 -> 固定张数求解 ======
+  // ====== 总控：默认全局最少订单；填范围但不填张数 => 回溯拆票（含上限）；填张数 => 固定张数求解 ======
   function computeInvoices(target, minS, maxS, maxSame, invoiceCount){
     const base = normalizeInventory(inventory);
     if(!base.length) return null;
 
-    // A) 填了“发票张数”：走 8.7 的固定张数方案
+    // A) 填了“发票张数”：走固定张数
     if(invoiceCount){
       const { dfs, base: arr } = solveWithInvoiceCount(target, minS, maxS);
-      const ans = dfs(target, invoiceCount, arr);
-      return ans;
+      return dfs(target, invoiceCount, arr);
     }
 
-    // B) 没填张数：先用“最少订单”选出总订单，再按范围拆包
+    // B) 不填张数：先用“最少订单”选出总订单，再按范围 + 上限做回溯拆票
     const rec = subsetMinOrders(target, base);
     if(!rec) return null;
-    const selected = rec.picks.map(i=>base[i]); // 这是全局最少订单的集合
-    const invoices = splitSelectedOrdersIntoInvoices(selected, minS, maxS, maxSame);
-    return invoices;
+    const selected = rec.picks.map(i=>base[i]);
+
+    return splitWithCapBacktrack(selected, minS, maxS, maxSame);
   }
 
   // ====== 页面入口 ======
