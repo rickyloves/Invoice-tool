@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票组合计算器 V8.7（分离库存）</title>
+  <title>发票组合计算器 V8.8（分离库存）</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
@@ -42,7 +42,7 @@
 </head>
 <body>
   <div class="container">
-    <h2>发票组合计算器 V8.7</h2>
+    <h2>发票组合计算器 V8.8</h2>
 
     <div class="card">
       <label>目标开票金额</label>
@@ -122,7 +122,6 @@
       const res = await fetch('inventory.json', {cache:'no-store'});
       if(!res.ok) throw new Error('fetch failed');
       const data = await res.json();
-      // 优先用本地（删除后）的库存；没有则用外部文件初始化
       const local = JSON.parse(localStorage.getItem('invoiceInventory')||'null');
       inventory = normalizeInventory(local || data);
       saveInventory();
@@ -165,7 +164,7 @@
     });
   }
 
-  // ====== 基础子集：用最少订单拼出指定和（0/1） ======
+  // ====== 基础 DP：最少订单拼出目标和（0/1） ======
   function subsetMinOrders(target, arr){
     const dp=Array(target+1).fill(null); dp[0]={cnt:0,picks:[]};
     for(let i=0;i<arr.length;i++){
@@ -179,7 +178,25 @@
     return dp[target];
   }
 
-  // 校验“相同金额发票张数上限”（针对发票金额）
+  // 在 [lo, hi] 区间内，求“最优子集和”：优先和越大，其次订单数越少
+  function bestSubsetInRange(avail, lo, hi){
+    const maxSum = Math.min(hi, avail.reduce((a,o)=>a+o.amount,0));
+    const dp=Array(maxSum+1).fill(null); dp[0]={cnt:0,picks:[]};
+    for(let i=0;i<avail.length;i++){
+      const a=avail[i].amount|0;
+      for(let s=maxSum;s>=a;s--){
+        if(dp[s-a] && (!dp[s] || dp[s-a].cnt+1 < dp[s].cnt)){
+          dp[s]={cnt:dp[s-a].cnt+1,picks:dp[s-a].picks.concat(i)};
+        }
+      }
+    }
+    for(let s=maxSum; s>=Math.max(1,lo); s--){
+      if(dp[s] && s>=lo && s<=hi) return {sum:s, picks:dp[s].picks};
+    }
+    return null;
+  }
+
+  // “相同发票金额张数上限”（针对发票金额）
   function checkSameInvoiceCap(invoices, maxSame){
     if(!isFinite(maxSame)) return true;
     const cnt = new Map();
@@ -191,80 +208,88 @@
     return true;
   }
 
-  // ====== 主搜索：全局最少订单；支持：固定张数 / 自动张数（在范围内） ======
+  // ====== 主搜索：全局最少订单；支持固定张数 / 自动张数（带范围） ======
   function fewInvoices(target, minS, maxS, maxSame, invoiceCount){
     const base = normalizeInventory(inventory);
-    const usableAll = base; // 订单可先不过滤范围；范围用于“发票金额”的限制
+    if(!base.length) return null;
 
-    if(!usableAll.length) return null;
+    // 封装：用“最少订单”拼成刚好 target 的一张发票（无范围/单张）
+    function solveOneShot(){
+      const rec = subsetMinOrders(target, base);
+      if(!rec) return null;
+      const pick = rec.picks.map(i=>base[i]);
+      const ans = [{orders: pick.map(x=>({order:x.order,amount:x.amount})), sum: target}];
+      return checkSameInvoiceCap(ans, maxSame) ? ans : null;
+    }
 
-    // 固定张数：严格拆成 invoiceCount 张，每张 sum 在 [minS,maxS]
+    // 固定张数：严格拆成 k 张，每张落在 [minS,maxS]
     function solveWithK(k){
-      const arr = usableAll.map((o,idx)=>({...o, __uid: `u${idx}`})); // 加 uid 防重复
+      // 给订单打 uid 方便“用过即删”
+      const arr = base.map((o,idx)=>({...o, __uid:`u${idx}`}));
       const memo=new Map();
 
       function dfs(remT, kk, avail){
-        const key=remT+'|'+kk+'|'+avail.length;
+        const key = remT + '|' + kk + '|' + avail.length;
         if(memo.has(key)) return memo.get(key);
 
+        // 最后一张：直接要凑 remT，且需满足范围
         if(kk===1){
-          // 最后一张直接子集求和 remT，并校验范围
-          const r=subsetMinOrders(remT, avail);
-          if(!r) return null;
+          const r = bestSubsetInRange(avail, (minS||1), (maxS||remT));
+          if(!r || r.sum!==remT) { memo.set(key,null); return null; }
           const pick=r.picks.map(i=>avail[i]);
-          const sum=remT;
-          if((minS && sum<minS) || (maxS && sum>maxS)) return null;
-          return [{orders: pick.map(x=>({order:x.order,amount:x.amount})), sum}];
+          const one=[{orders: pick.map(x=>({order:x.order,amount:x.amount})), sum: r.sum}];
+          memo.set(key, one);
+          return one;
         }
 
-        // 尝试从大到小挑一个目标 sum1（用子集求和），剩余递归 kk-1
-        // 这里用每个元素的金额作为“锚点”生成若干尝试的 sum1
-        for(let i=0;i<avail.length;i++){
-          const tail=avail.slice(i);
-          const r=subsetMinOrders(tail[i].amount, tail);
-          if(!r) continue;
-          const pick=r.picks.map(j=>tail[j]);
-          const sumPick=pick.reduce((a,o)=>a+o.amount,0);
-          if((minS && sumPick<minS) || (maxS && sumPick>maxS)) continue;
+        // 中间张：在 [minS,maxS] 内找一张“尽量大且最少订单”的 sum1
+        const r1 = bestSubsetInRange(avail, (minS||1), Math.min(maxS||remT, remT));
+        if(!r1){ memo.set(key,null); return null; }
 
-          const usedUid=new Set(pick.map(x=>x.__uid));
-          const rest=avail.filter(x=>!usedUid.has(x.__uid));
-          const sub=dfs(remT-sumPick, kk-1, rest);
+        // 这里可能存在多个可行 sum1，我们从大到小继续尝试，逐步“缩减”可用集
+        // 简化策略：先用 r1，再递归；若失败，再往次优和下降尝试
+        const trySums = [];
+        for(let s=r1.sum; s>=Math.max(1, (minS||1)); s--){
+          // 只尝试有解的 s
+          const probe = bestSubsetInRange(avail, s, s);
+          if(probe) trySums.push(probe);
+          if(trySums.length>=8) break; // 控制分支数量，避免卡死
+        }
+
+        for(const tryR of trySums){
+          const pick = tryR.picks.map(i=>avail[i]);
+          const used = new Set(pick.map(x=>x.__uid));
+          const rest = avail.filter(x=>!used.has(x.__uid));
+          const sub = dfs(remT-tryR.sum, kk-1, rest);
           if(sub){
-            const res=[{orders: pick.map(x=>({order:x.order,amount:x.amount})), sum: sumPick}, ...sub];
-            // 校验“相同发票金额”上限
-            if(checkSameInvoiceCap(res, maxSame)){ memo.set(key,res); return res; }
+            const res = [{orders: pick.map(x=>({order:x.order,amount:x.amount})), sum: tryR.sum}, ...sub];
+            if(checkSameInvoiceCap(res, maxSame)){ memo.set(key, res); return res; }
           }
         }
-        memo.set(key,null); return null;
+        memo.set(key, null);
+        return null;
       }
 
-      const ans=dfs(target, k, arr);
-      return ans && checkSameInvoiceCap(ans, maxSame) ? ans : null;
+      return dfs(target, k, arr);
     }
 
-    // 情况 A：明确填写了“发票张数”
+    // 情况 A：没有填“范围”也没有填“张数” => 默认“一张票凑满目标”
+    const hasRange = (minS>0) || (maxS>0);
+    if(!hasRange && !invoiceCount){
+      return solveOneShot();
+    }
+
+    // 情况 B：明确填写“发票张数”
     if(invoiceCount){
       return solveWithK(invoiceCount);
     }
 
-    // 情况 B：未填写“发票张数”
-    // 1) 若没有“范围”限制，则默认拼成 1 张（维持旧逻辑）
-    const noRange = (!minS && !maxS) || (maxS>=target && (!minS || minS<=target));
-    if(noRange){
-      const rec=subsetMinOrders(target, usableAll);
-      if(!rec) return null;
-      const pick=rec.picks.map(i=>usableAll[i]);
-      const one=[{orders: pick.map(x=>({order:x.order,amount:x.amount})), sum: target}];
-      return checkSameInvoiceCap(one, maxSame) ? one : null;
-    }
-
-    // 2) 存在“范围”限制：自动在可行张数区间内搜索（从小到大，尽量少张；且内层 DP 已经保证最少订单）
-    const minPer = minS || 1;
-    const maxPer = maxS || target; // 若没填上限就按 target 处理
-    const kMin = Math.ceil(target / maxPer);
-    const kMax = Math.floor(target / Math.max(1, minPer));
-    for(let k = kMin; k <= kMax; k++){
+    // 情况 C：填写了范围，但没有指定张数 => 自动在可行张数范围内找解（从少到多）
+    const lo = (minS>0) ? minS : 1;
+    const hi = (maxS>0) ? maxS : target;
+    const kMin = Math.ceil(target / hi);
+    const kMax = Math.floor(target / Math.max(1, lo));
+    for(let k=kMin; k<=kMax; k++){
       const ans = solveWithK(k);
       if(ans) return ans;
     }
@@ -313,7 +338,6 @@
     document.getElementById('confirm-delete-btn').onclick=()=>{
       if(!lastInv) return;
       deleteRecords.unshift(lastInv);
-      // 从库存移除已用订单
       const removeSet=new Set(lastInv.flatMap(inv=>inv.orders.map(makeKey)));
       inventory = inventory.filter(o=>!removeSet.has(makeKey(o)));
       saveDeleteRecords(); saveInventory(); renderDeleteRecords();
