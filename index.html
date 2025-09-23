@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票组合计算器 V8.13（误差最小匹配·多方案）</title>
+  <title>发票组合计算器 V8.14（近似匹配提速+防卡死）</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
@@ -42,7 +42,7 @@
 </head>
 <body>
   <div class="container">
-    <h2>发票组合计算器 V8.13</h2>
+    <h2>发票组合计算器 V8.14</h2>
 
     <div class="card">
       <label>目标开票金额</label>
@@ -66,7 +66,7 @@
         </div>
       </div>
 
-      <!-- 新增两个勾选框 -->
+      <!-- 近似匹配开关 -->
       <div class="two-cols">
         <div>
           <input type="checkbox" id="allow-approx">
@@ -175,7 +175,7 @@
     });
   }
 
-  /* ====== DP（最少订单子集和） ====== */
+  /* ====== 精确 DP 与拆票（保持 V8.10 逻辑） ====== */
   function subsetMinOrders(target, arr){
     const dp=Array(target+1).fill(null); dp[0]={cnt:0,picks:[]};
     for(let i=0;i<arr.length;i++){
@@ -188,8 +188,6 @@
     }
     return dp[target];
   }
-
-  // 区间最佳子集（[lo,hi]），优先金额大，其次订单少
   function bestSubsetInRange(avail, lo, hi){
     const maxSum = Math.min(hi, avail.reduce((a,o)=>a+o.amount,0));
     const dp=Array(maxSum+1).fill(null); dp[0]={cnt:0,picks:[]};
@@ -206,8 +204,6 @@
     }
     return null;
   }
-
-  // —— 带“相同发票金额张数上限”的回溯拆票器 ——
   function splitWithCapBacktrack(selectedOrders, minS, maxS, maxSame){
     if(!(minS>0) && !(maxS>0)){
       const total = selectedOrders.reduce((a,o)=>a+o.amount,0);
@@ -217,7 +213,7 @@
     const hi = (maxS>0)?maxS:selectedOrders.reduce((a,o)=>a+o.amount,0);
 
     let avail = selectedOrders.slice();
-    const capMap = new Map(); // 发票金额 -> 已出现次数
+    const capMap = new Map();
     const keyOf = o => `${o.order}|${o.amount}`;
 
     function genCandidates(av, limit=8){
@@ -269,8 +265,6 @@
 
     return dfs(avail);
   }
-
-  // 固定“发票张数”的拆分（沿用 V8.10）
   function solveWithInvoiceCount(target, minS, maxS){
     const base = inventory.map((o,idx)=>({...o, __uid:`u${idx}`}));
     function bestSubsetInRangeEx(avail, lo, hi){
@@ -334,107 +328,180 @@
     return { dfs, base };
   }
 
-  /* ====== 近似匹配（一次 DP 求所有可达金额，再从近到远挑解） ====== */
-  function buildDPBand(arr, high){
-    const dp=Array(high+1).fill(null); dp[0]={cnt:0,picks:[]};
+  /* ====== 近似匹配：窗口化 TypedArray DP + 超时退化 ====== */
+  const APPROX_CONF = {
+    TIME_BUDGET_MS: 450,      // 单次近似计算时间预算（避免卡死）
+    MAX_ITEMS_APPROX: 1200,   // 近似时最多参与的订单数（按金额降序取前N）
+    TOP_K: 5                  // 返回的最多方案数
+  };
+
+  // 在 [0..high] 上构建 DP（最少订单数），带时间预算与 TypedArray 加速
+  function buildDPBandFast(arr, high, timeBudgetMs){
+    const t0 = performance.now();
+    const cnt = new Int32Array(high+1); cnt.fill(-1); cnt[0]=0;
+    const prevSum = new Int32Array(high+1); prevSum.fill(-1);
+    const prevIdx = new Int32Array(high+1); prevIdx.fill(-1);
+
     for(let i=0;i<arr.length;i++){
-      const a=arr[i].amount|0;
+      const a = arr[i].amount|0;
       for(let s=high; s>=a; s--){
-        if(dp[s-a] && (!dp[s] || dp[s-a].cnt+1 < dp[s].cnt)){
-          dp[s]={cnt:dp[s-a].cnt+1, picks:dp[s-a].picks.concat(i)};
-        }
-      }
-    }
-    return dp;
-  }
-
-  function nearestCandidatesNoCount(base, target, minS, maxS, maxSame, onlyHigher, topK=5){
-    const totalSum = base.reduce((a,o)=>a+o.amount,0);
-    if(totalSum===0) return [];
-
-    const hardHigh = totalSum;
-    let band = Math.max(500, Math.floor(target*0.05));     // 初始 ±5% or 500
-    const maxBand = Math.max(5000, Math.floor(target*0.5)); // 最多扩到 ±50% or 5000
-
-    while (band <= maxBand) {
-      const low  = onlyHigher ? target : Math.max(1, target - band);
-      const high = Math.min(hardHigh, target + band);
-      const dp = buildDPBand(base, high);
-
-      // 从 target 出发，按误差递增找候选
-      const seen = new Set();
-      const cand = [];
-      const maxD = Math.max(target - low, high - target);
-      for (let d = 0; d <= maxD && cand.length < topK*3; d++) {
-        const s1 = target - d;
-        const s2 = target + d;
-        if (!onlyHigher && s1 >= low && dp[s1] && !seen.has(s1)) {
-          cand.push({sum:s1, picks:dp[s1].picks, cnt:dp[s1].cnt, diff:d});
-          seen.add(s1);
-        }
-        if (s2 !== s1 && s2 <= high && dp[s2] && !seen.has(s2)) {
-          if (!onlyHigher || s2 >= target) {
-            cand.push({sum:s2, picks:dp[s2].picks, cnt:dp[s2].cnt, diff:d});
-            seen.add(s2);
+        const cs = cnt[s-a];
+        if(cs>=0){
+          const nc = cs+1;
+          if(cnt[s]===-1 || nc<cnt[s]){
+            cnt[s]=nc; prevSum[s]=s-a; prevIdx[s]=i;
           }
         }
-        if (cand.length >= topK*3) break;
       }
+      if((i&7)===0 && performance.now()-t0 > timeBudgetMs){
+        return {cnt, prevSum, prevIdx, aborted:true};
+      }
+    }
+    return {cnt, prevSum, prevIdx, aborted:false};
+  }
+  function reconstructPicks(sum, prevSum, prevIdx){
+    const picks=[];
+    while(sum>0){
+      const idx = prevIdx[sum];
+      if(idx<0) break;
+      picks.push(idx);
+      sum = prevSum[sum];
+    }
+    return picks.reverse();
+  }
 
-      // 对每个候选尝试拆票（范围+相同金额上限）
-      const finalPlans = [];
-      for (const c of cand.sort((a,b)=>a.diff-b.diff || a.cnt-b.cnt)) {
-        const selected = c.picks.map(i=>base[i]);
-        const split = splitWithCapBacktrack(selected, minS, maxS, maxSame);
-        if (split) {
-          finalPlans.push({ total:c.sum, diff:Math.abs(c.sum-target), ordersCount:c.cnt, invoices:split });
-          if (finalPlans.length >= topK) break;
+  // 近似（不固定发票张数）
+  function nearestCandidatesNoCount(base, target, minS, maxS, maxSame, onlyHigher){
+    if(base.length===0) return [];
+    // 金额降序 + 限定最大参与条数（加速）
+    const sorted = base.slice().sort((a,b)=>b.amount-a.amount).slice(0, APPROX_CONF.MAX_ITEMS_APPROX);
+
+    const totalSum = sorted.reduce((a,o)=>a+o.amount,0);
+    if(totalSum===0) return [];
+
+    let band = Math.max(500, Math.floor(target*0.05));    // 初始搜索带宽
+    const maxBand = Math.max(5000, Math.floor(target*0.5)); // 最大带宽
+    const topK = APPROX_CONF.TOP_K;
+
+    while (band <= maxBand){
+      const low  = onlyHigher ? target : Math.max(1, target - band);
+      const high = Math.min(totalSum, target + band);
+
+      const {cnt, prevSum, prevIdx, aborted} = buildDPBandFast(sorted, high, APPROX_CONF.TIME_BUDGET_MS);
+      const cand = [];
+      const seen = new Set();
+      const maxD = Math.max(target-low, high-target);
+      for(let d=0; d<=maxD && cand.length < topK*3; d++){
+        const s1 = target - d;
+        const s2 = target + d;
+        if(!onlyHigher && s1>=low && cnt[s1]>=0 && !seen.has(s1)){
+          cand.push({sum:s1, cnt:cnt[s1], picks: reconstructPicks(s1,prevSum,prevIdx), diff:d});
+          seen.add(s1);
+        }
+        if(s2!==s1 && s2<=high && cnt[s2]>=0 && !seen.has(s2)){
+          cand.push({sum:s2, cnt:cnt[s2], picks: reconstructPicks(s2,prevSum,prevIdx), diff:d});
+          seen.add(s2);
         }
       }
-      if (finalPlans.length > 0) return finalPlans;
-      band = Math.min(maxBand, band*2); // 扩张带宽再试
+
+      const plans=[];
+      cand.sort((a,b)=>a.diff-b.diff || a.cnt-b.cnt);
+      for(const c of cand){
+        const selected = c.picks.map(i=>sorted[i]);
+        const split = splitWithCapBacktrack(selected, minS, maxS, maxSame);
+        if(split){
+          plans.push({ total:c.sum, diff:Math.abs(c.sum-target), ordersCount:c.cnt, invoices:split });
+          if(plans.length>=topK) break;
+        }
+      }
+      if(plans.length>0) return plans;
+      if(!aborted){
+        // 没找到但未超时 → 扩大带宽
+        band = Math.min(maxBand, band*2);
+      }else{
+        // 超时 → 退化为增量外扩精确搜索（安全、不卡）
+        return incrementalScanExact(sorted, target, minS, maxS, maxSame, onlyHigher, topK);
+      }
     }
     return [];
   }
 
-  function nearestCandidatesWithCount(target, minS, maxS, invoiceCount, onlyHigher, topK=5){
-    const baseTotal = inventory.reduce((a,o)=>a+o.amount,0);
-    if(baseTotal===0) return [];
+  // 超时退化：从目标向外逐步尝试“精确解”，找到就停（最多尝试若干次）
+  function incrementalScanExact(arr, target, minS, maxS, maxSame, onlyHigher, topK){
+    const plans=[];
+    const maxTries = 400; // 硬上限，防止长时间计算
+    let tries=0;
+    const lowStart = onlyHigher ? target : Math.max(1, target-1000);
+    const highEnd  = target+1000;
 
-    let band = Math.max(500, Math.floor(target*0.05));
-    const maxBand = Math.max(5000, Math.floor(target*0.5));
-    const plans = [];
+    for(let d=0; tries<maxTries && plans.length<topK; d++){
+      const tryList=[];
+      if(!onlyHigher){
+        const s1 = target - d;
+        if(s1>=lowStart) tryList.push(s1);
+      }
+      const s2 = target + d;
+      if(s2<=highEnd && (tryList.length===0 || s2!==tryList[0])) tryList.push(s2);
 
-    while (band <= maxBand && plans.length < topK) {
-      const low  = onlyHigher ? target : Math.max(1, target - band);
-      const high = Math.min(baseTotal, target + band);
-      const maxD = Math.max(target - low, high - target);
-      for (let d=0; d<=maxD && plans.length<topK; d++){
-        const tryS = [];
-        if (!onlyHigher && (target-d)>=low) tryS.push(target-d);
-        if ((target+d)<=high && (d!==0 || tryS.length===0)) tryS.push(target+d);
-        for (const s of tryS){
-          const { dfs, base } = solveWithInvoiceCount(s, minS, maxS);
-          const res = dfs(s, invoiceCount, base);
-          if (res){
-            const cnt = res.reduce((acc,inv)=>acc + inv.orders.length, 0);
-            plans.push({ total:s, diff:Math.abs(s-target), ordersCount:cnt, invoices:res });
-            if (plans.length>=topK) break;
+      for(const t of tryList){
+        tries++;
+        const rec = subsetMinOrders(t, arr); // 最少订单命中
+        if(rec){
+          const selected = rec.picks.map(i=>arr[i]);
+          const split = splitWithCapBacktrack(selected, minS, maxS, maxSame);
+          if(split){
+            plans.push({ total:t, diff:Math.abs(t-target), ordersCount:rec.cnt, invoices:split });
+            if(plans.length>=topK) break;
           }
         }
+        if(tries>=maxTries) break;
       }
-      if (plans.length>0) return plans.sort((a,b)=>a.diff-b.diff || a.ordersCount-b.ordersCount).slice(0,topK);
-      band = Math.min(maxBand, band*2);
+      if( (onlyHigher && (target+d)>=highEnd) || (!onlyHigher && (target-d)<lowStart && (target+d)>highEnd) ) break;
     }
+    plans.sort((a,b)=>a.diff-b.diff || a.ordersCount-b.ordersCount);
     return plans;
   }
 
-  /* ====== 总控（支持精确/多方案近似） ====== */
+  // 近似（固定发票张数）采用增量外扩（solveWithInvoiceCount 计算量较大）
+  function nearestCandidatesWithCount(target, minS, maxS, invoiceCount, onlyHigher){
+    const plans=[];
+    const maxTries = 300;
+    let tries=0;
+    const lowStart = onlyHigher ? target : Math.max(1, target-1000);
+    const highEnd  = target+1000;
+
+    for(let d=0; tries<maxTries && plans.length<APPROX_CONF.TOP_K; d++){
+      const tryList=[];
+      if(!onlyHigher){
+        const s1 = target - d;
+        if(s1>=lowStart) tryList.push(s1);
+      }
+      const s2 = target + d;
+      if(s2<=highEnd && (tryList.length===0 || s2!==tryList[0])) tryList.push(s2);
+
+      for(const t of tryList){
+        tries++;
+        const { dfs, base } = solveWithInvoiceCount(t, minS, maxS);
+        const res = dfs(t, invoiceCount, base);
+        if(res){
+          const cnt = res.reduce((acc,inv)=>acc + inv.orders.length, 0);
+          plans.push({ total:t, diff:Math.abs(t-target), ordersCount:cnt, invoices:res });
+          if(plans.length>=APPROX_CONF.TOP_K) break;
+        }
+        if(tries>=maxTries) break;
+      }
+      if( (onlyHigher && (target+d)>=highEnd) || (!onlyHigher && (target-d)<lowStart && (target+d)>highEnd) ) break;
+    }
+    plans.sort((a,b)=>a.diff-b.diff || a.ordersCount-b.ordersCount);
+    return plans;
+  }
+
+  /* ====== 总控（精确优先，近似多方案） ====== */
   function computeInvoicesMulti(target, minS, maxS, maxSame, invoiceCount, allowApprox, onlyHigher){
     const base = normalizeInventory(inventory);
     if(!base.length) return {plans:[], best:null};
 
-    // A) 先试精确解
+    // 精确优先
     if(invoiceCount){
       const { dfs, base: arr } = solveWithInvoiceCount(target, minS, maxS);
       const exact = dfs(target, invoiceCount, arr);
@@ -452,18 +519,17 @@
       }
     }
 
-    // B) 精确失败 & 未开近似
     if(!allowApprox) return {plans:[], best:null};
 
-    // C) 近似候选（多方案）
-    let plans = [];
-    if (invoiceCount){
-      plans = nearestCandidatesWithCount(target, minS, maxS, invoiceCount, onlyHigher, 5);
+    // 近似
+    let plans=[];
+    if(invoiceCount){
+      plans = nearestCandidatesWithCount(target, minS, maxS, invoiceCount, onlyHigher);
     }else{
-      plans = nearestCandidatesNoCount(base, target, minS, maxS, maxSame, onlyHigher, 5);
+      plans = nearestCandidatesNoCount(base, target, minS, maxS, maxSame, onlyHigher);
     }
-    if (plans.length===0) return {plans:[], best:null};
-    return {plans, best:0}; // best=索引0（最优）
+    if(plans.length===0) return {plans:[], best:null};
+    return {plans, best:0};
   }
 
   /* ====== 页面入口 ====== */
@@ -476,7 +542,7 @@
     const accC=document.querySelector('.accordion-content');
     accH.onclick=()=>{ const open=accC.style.display==='block'; accC.style.display=open?'none':'block'; accH.classList.toggle('open',!open); };
 
-    let lastInv=null; // 用于“确认删除”（采用方案#1）
+    let lastInv=null; // 方案#1用于删除
     document.getElementById('combine-btn').onclick=()=>{
       const tgt=+document.getElementById('target-input').value;
       if(!tgt) return alert('请输入目标金额');
@@ -492,20 +558,19 @@
 
       const {plans, best} = computeInvoicesMulti(tgt,minS,maxS,msc,ic,allowApprox,onlyHigher);
       if(plans.length===0){
-        const hint = allowApprox ? '（已尝试近似搜索，依然无法满足约束）' : '';
+        const hint = allowApprox ? '（已在限时范围内尝试近似搜索，仍无合法方案）' : '';
         return alert('无法组合出满足条件的金额' + hint);
       }
 
-      // 输出多个方案（最多5个），方案#1为最优，用于删除
       const out=[];
       if(plans[0].diff!==0){
-        out.push(`⚠️ 未找到精确 ${tgt}，以下为“最接近”方案（优先误差小、再优先订单少）`);
+        out.push(`⚠️ 未找到精确 ${tgt}，以下为“最接近”方案（误差优先，其次订单更少）`);
         if(onlyHigher) out.push(`（已启用“不得小于目标”，仅展示 ≥ ${tgt} 的方案）`);
         out.push('');
       }
-      plans.forEach((p,idx)=>{
+      plans.slice(0, APPROX_CONF.TOP_K).forEach((p,idx)=>{
         const sign = p.total>=tgt ? '+'+(p.total-tgt) : '-'+(tgt-p.total);
-        out.push(`—— 方案#${idx+1}：实际 ${p.total}（目标 ${tgt}，误差 ${sign}），总订单数≈${p.ordersCount}`);
+        out.push(`—— 方案#${idx+1}：实际 ${p.total}（目标 ${tgt}，误差 ${sign}），总订单≈${p.ordersCount}`);
         p.invoices.forEach((inv,i)=>{
           out.push(`发票${i+1}：${inv.sum}元${inv.orders.length>1?'（相关订单合并）':''}`);
           inv.orders.forEach(o=> out.push(`订单号：${o.order}，金额：${o.amount}元`));
@@ -517,8 +582,7 @@
 
       document.getElementById('result-output').textContent=out.join('\n');
 
-      // 将“方案#1”设置为可删除对象（与现有 UI 兼容）
-      lastInv = plans[0].invoices;
+      lastInv = plans[best||0].invoices;
       document.getElementById('confirm-delete-btn').classList.remove('hidden');
     };
 
