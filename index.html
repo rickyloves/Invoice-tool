@@ -2,47 +2,75 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票组合计算器 V8.15-debug</title>
+  <title>发票组合计算器 V8.16</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body{background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;color:#333;padding-bottom:180px}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;color:#333;padding-bottom:100px}
     .container{max-width:500px;margin:18px auto;padding:0 10px}
+    h2{text-align:center;margin-bottom:12px;font-size:1.6rem}
     .card{background:#fff;border-radius:6px;padding:16px;margin-bottom:12px;box-shadow:0 2px 5px rgba(0,0,0,.05)}
-    #result-output,#debug-log{white-space:pre-wrap;max-height:240px;overflow:auto;font-family:monospace;font-size:.9rem}
+    label{display:block;margin-top:12px;font-weight:bold}
+    input,textarea{width:100%;padding:8px;margin-top:6px;border:1px solid #ccc;border-radius:4px}
+    textarea{resize:vertical}
+    #result-output,#debug-log{white-space:pre-wrap;max-height:220px;overflow:auto;font-family:monospace;font-size:.9rem}
+    .accordion{border-radius:6px;overflow:hidden}
+    .accordion-header{background:#fff;padding:12px 16px;cursor:pointer;font-weight:bold;box-shadow:0 2px 5px rgba(0,0,0,.05);display:flex;justify-content:space-between;align-items:center}
+    .accordion-header .arrow{width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:7px solid #666;transition:transform .28s ease}
+    .accordion-header.open .arrow{transform:rotate(180deg)}
+    .accordion-content{display:none;background:#fff;padding:12px 16px;box-shadow:0 2px 5px rgba(0,0,0,.05)}
     .footer{position:fixed;left:0;right:0;bottom:0;background:#fff;box-shadow:0 -2px 5px rgba(0,0,0,.05);padding:8px;display:flex;gap:8px}
     .footer button{flex:1;padding:12px 0;font-size:1rem;border:none;border-radius:4px;cursor:pointer}
-    .primary{background:#007bff;color:#fff}
+    .primary{background:#007bff;color:#fff}.secondary{background:#6c757d;color:#fff}.danger{background:#dc3545;color:#fff}
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>发票组合计算器 V8.15-debug</h2>
+    <h2>发票组合计算器 V8.16</h2>
 
     <div class="card">
-      <label>目标金额</label>
-      <input id="target-input" type="number" placeholder="如20000">
+      <label>目标开票金额</label>
+      <input id="target-input" type="number" placeholder="如 20000">
 
       <label><input type="checkbox" id="allow-approx">允许误差最小匹配</label><br>
       <label><input type="checkbox" id="only-higher">匹配金额不得小于目标</label>
+
+      <label>公司抬头</label>
+      <textarea id="company-header" rows="2" placeholder="行1：公司名称\n行2：统一社会信用代码"></textarea>
+      <div id="header-history"></div>
     </div>
 
     <div class="card">
-      <h3>结果输出</h3>
+      <h3>导出结果</h3>
       <div id="result-output"></div>
     </div>
 
-    <div class="card">
-      <h3>调试输出</h3>
-      <div id="debug-log"></div>
+    <!-- 新增调试输出折叠卡 -->
+    <div class="accordion">
+      <div class="accordion-header" id="debug-toggle">
+        <span>调试输出</span>
+        <div class="arrow"></div>
+      </div>
+      <div class="accordion-content" id="debug-log"></div>
+    </div>
+
+    <div class="accordion">
+      <div class="accordion-header">
+        <span>删除记录（最近10条）</span>
+        <div class="arrow"></div>
+      </div>
+      <div class="accordion-content" id="record-list"></div>
     </div>
   </div>
 
   <div class="footer">
     <button id="combine-btn" class="primary">一键组合</button>
+    <button id="copy-btn" class="secondary">复制结果</button>
+    <button id="confirm-delete-btn" class="danger hidden">确认删除</button>
   </div>
 
 <script>
-// 示例库存，可以换成 inventory.json
+// ===== 示例库存（你会换成 inventory.json） =====
 let inventory=[
   {order:"A",amount:1000},
   {order:"B",amount:950},
@@ -53,10 +81,12 @@ let inventory=[
   {order:"G",amount:7200}
 ];
 
+// ===== 调试日志 =====
 function log(msg){
   document.getElementById("debug-log").textContent+=msg+"\n";
 }
 
+// ===== 简化 DP =====
 function subsetMinOrders(target, arr){
   if(target<0) return null;
   const dp=Array(target+1).fill(null); dp[0]={cnt:0,picks:[]};
@@ -71,10 +101,10 @@ function subsetMinOrders(target, arr){
   return dp[target];
 }
 
+// ===== 误差搜索（逐步扩展） =====
 function computeApprox(target, arr, onlyHigher){
   const maxSum=arr.reduce((s,o)=>s+o.amount,0);
   log("库存总金额="+maxSum+"，目标="+target);
-
   const stepLimits=[500,1000,2000,3000,5000];
   for(const limit of stepLimits){
     log("尝试误差范围 ±"+limit);
@@ -95,16 +125,15 @@ function computeApprox(target, arr, onlyHigher){
   return null;
 }
 
+// ===== UI逻辑 =====
 document.getElementById("combine-btn").onclick=()=>{
   document.getElementById("result-output").textContent="";
   document.getElementById("debug-log").textContent="";
   const tgt=+document.getElementById("target-input").value;
   const allowApprox=document.getElementById("allow-approx").checked;
   const onlyHigher=document.getElementById("only-higher").checked;
-
   log("=== 开始计算 ===");
   log("目标金额="+tgt+"，允许近似="+allowApprox+"，不得小于目标="+onlyHigher);
-
   let exact=subsetMinOrders(tgt,inventory);
   if(exact){
     log("找到精确匹配");
@@ -129,6 +158,22 @@ document.getElementById("combine-btn").onclick=()=>{
   log("没有精确结果，且未开启近似搜索");
   document.getElementById("result-output").textContent="无法组合出满足条件的金额";
 };
+
+// 折叠控制
+function bindAccordion(id){
+  const header=document.querySelector(id);
+  const arrow=header.querySelector(".arrow");
+  const content=header.nextElementSibling;
+  header.onclick=()=>{
+    const open=content.style.display==="block";
+    content.style.display=open?"none":"block";
+    header.classList.toggle("open",!open);
+  };
+}
+bindAccordion("#debug-toggle");
+document.querySelectorAll(".accordion-header").forEach(h=>{
+  if(h.id!=="debug-toggle") bindAccordion("#"+h.id);
+});
 </script>
 </body>
 </html>
