@@ -2,21 +2,21 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票组合计算器 V8.14-debug</title>
+  <title>发票组合计算器 V8.15-debug</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body{background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;color:#333;padding-bottom:160px}
-    .container{max-width:480px;margin:18px auto;padding:0 10px}
+    body{background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;color:#333;padding-bottom:180px}
+    .container{max-width:500px;margin:18px auto;padding:0 10px}
     .card{background:#fff;border-radius:6px;padding:16px;margin-bottom:12px;box-shadow:0 2px 5px rgba(0,0,0,.05)}
-    #result-output,#debug-log{white-space:pre-wrap;max-height:220px;overflow:auto;font-family:monospace;font-size:.9rem}
+    #result-output,#debug-log{white-space:pre-wrap;max-height:240px;overflow:auto;font-family:monospace;font-size:.9rem}
     .footer{position:fixed;left:0;right:0;bottom:0;background:#fff;box-shadow:0 -2px 5px rgba(0,0,0,.05);padding:8px;display:flex;gap:8px}
     .footer button{flex:1;padding:12px 0;font-size:1rem;border:none;border-radius:4px;cursor:pointer}
-    .primary{background:#007bff;color:#fff}.secondary{background:#6c757d;color:#fff}
+    .primary{background:#007bff;color:#fff}
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>发票组合计算器 V8.14-debug</h2>
+    <h2>发票组合计算器 V8.15-debug</h2>
 
     <div class="card">
       <label>目标金额</label>
@@ -42,13 +42,23 @@
   </div>
 
 <script>
-let inventory=[{order:"A",amount:1000},{order:"B",amount:950},{order:"C",amount:1200},{order:"D",amount:880},{order:"E",amount:620}];
+// 示例库存，可以换成 inventory.json
+let inventory=[
+  {order:"A",amount:1000},
+  {order:"B",amount:950},
+  {order:"C",amount:1200},
+  {order:"D",amount:880},
+  {order:"E",amount:620},
+  {order:"F",amount:5000},
+  {order:"G",amount:7200}
+];
 
 function log(msg){
   document.getElementById("debug-log").textContent+=msg+"\n";
 }
 
 function subsetMinOrders(target, arr){
+  if(target<0) return null;
   const dp=Array(target+1).fill(null); dp[0]={cnt:0,picks:[]};
   for(let i=0;i<arr.length;i++){
     const a=arr[i].amount|0;
@@ -62,18 +72,27 @@ function subsetMinOrders(target, arr){
 }
 
 function computeApprox(target, arr, onlyHigher){
-  let best=null;
-  for(let offset=1;offset<=500;offset++){
+  const maxSum=arr.reduce((s,o)=>s+o.amount,0);
+  log("库存总金额="+maxSum+"，目标="+target);
+
+  const stepLimits=[500,1000,2000,3000,5000];
+  for(const limit of stepLimits){
+    log("尝试误差范围 ±"+limit);
     let candidates=[];
-    if(!onlyHigher) candidates.push(target-offset);
-    candidates.push(target+offset);
-    for(const t of candidates){
-      if(t<=0) continue;
-      const res=subsetMinOrders(t,arr);
-      if(res){return {sum:t,res};}
+    for(let offset=1;offset<=limit;offset++){
+      let tryList=[];
+      if(!onlyHigher) tryList.push(target-offset);
+      tryList.push(target+offset);
+      for(const t of tryList){
+        if(t<=0 || t>maxSum) continue;
+        const res=subsetMinOrders(t,arr);
+        if(res){
+          return {sum:t,res};
+        }
+      }
     }
   }
-  return best;
+  return null;
 }
 
 document.getElementById("combine-btn").onclick=()=>{
@@ -83,25 +102,31 @@ document.getElementById("combine-btn").onclick=()=>{
   const allowApprox=document.getElementById("allow-approx").checked;
   const onlyHigher=document.getElementById("only-higher").checked;
 
-  log("开始计算，目标="+tgt+"，允许近似="+allowApprox+"，不得小于目标="+onlyHigher);
+  log("=== 开始计算 ===");
+  log("目标金额="+tgt+"，允许近似="+allowApprox+"，不得小于目标="+onlyHigher);
 
   let exact=subsetMinOrders(tgt,inventory);
   if(exact){
     log("找到精确匹配");
-    document.getElementById("result-output").textContent="精确匹配 "+tgt+" 元";
+    document.getElementById("result-output").textContent="精确匹配 "+tgt+" 元 ✅";
     return;
   }
   if(allowApprox){
-    log("精确匹配失败，开始近似搜索 ±500");
+    log("精确匹配失败，开始近似搜索");
     let approx=computeApprox(tgt,inventory,onlyHigher);
     if(approx){
       let diff=approx.sum-tgt;
-      log("找到近似结果 sum="+approx.sum+" 误差="+diff);
-      document.getElementById("result-output").textContent="近似匹配 "+approx.sum+" 元 (目标 "+tgt+"，误差 "+diff+")";
+      log("找到近似结果 sum="+approx.sum+"，误差="+diff);
+      document.getElementById("result-output").textContent=
+        "近似匹配 "+approx.sum+" 元 (目标 "+tgt+"，误差 "+diff+")";
+      return;
+    } else {
+      log("近似搜索失败，超过±5000都没有解");
+      document.getElementById("result-output").textContent="无法找到近似结果";
       return;
     }
   }
-  log("没有找到任何组合");
+  log("没有精确结果，且未开启近似搜索");
   document.getElementById("result-output").textContent="无法组合出满足条件的金额";
 };
 </script>
