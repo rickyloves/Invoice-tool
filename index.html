@@ -2,604 +2,108 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票组合计算器 V8.14（近似匹配提速+防卡死）</title>
+  <title>发票组合计算器 V8.14-debug</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;color:#333;padding-bottom:84px}
+    body{background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;color:#333;padding-bottom:160px}
     .container{max-width:480px;margin:18px auto;padding:0 10px}
-    h2{text-align:center;margin-bottom:12px;font-size:1.6rem}
     .card{background:#fff;border-radius:6px;padding:16px;margin-bottom:12px;box-shadow:0 2px 5px rgba(0,0,0,.05)}
-    label{display:block;margin-top:12px;font-weight:bold}
-    input,textarea{width:100%;padding:8px;margin-top:6px;border:1px solid #ccc;border-radius:4px}
-    textarea{resize:vertical}
-    .flex{display:flex;gap:8px;margin-top:6px}
-    .flex input{flex:1}
-    .flex span{line-height:32px}
-    .two-cols{display:flex;gap:8px;margin-top:6px}
-    .two-cols>div{flex:1}
-    #header-history{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
-    .hdr-item{background:#ececec;color:#555;border-radius:4px;display:flex;align-items:center;overflow:hidden}
-    .hdr-item button.txt{background:transparent;border:none;padding:6px 10px;font-size:.9rem;color:#333;cursor:pointer}
-    .hdr-item button.del{background:transparent;border:none;padding:6px;font-size:1rem;color:#999;cursor:pointer;transition:color .2s}
-    .hdr-item button.del:hover{color:#666}
-    #result-output{white-space:pre-wrap;max-height:260px;overflow:auto;font-family:monospace}
-    .accordion{border-radius:6px;overflow:hidden}
-    .accordion-header{background:#fff;padding:12px 16px;cursor:pointer;font-weight:bold;box-shadow:0 2px 5px rgba(0,0,0,.05);display:flex;justify-content:space-between;align-items:center}
-    .accordion-header .arrow{width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:7px solid #666;transition:transform .28s ease}
-    .accordion-header.open .arrow{transform:rotate(180deg)}
-    .accordion-content{display:none;background:#fff;padding:12px 16px;box-shadow:0 2px 5px rgba(0,0,0,.05)}
-    .record-item{border-top:1px solid #eee;padding:10px 0}
-    .record-item:first-child{border-top:none}
-    .record-item .orders{margin-top:8px;line-height:1.45}
-    .record-item .btn-recover{display:block;margin:10px auto 0;padding:6px 12px;background:#6c757d;color:#fff;border:none;border-radius:4px;font-size:.9rem;cursor:pointer}
+    #result-output,#debug-log{white-space:pre-wrap;max-height:220px;overflow:auto;font-family:monospace;font-size:.9rem}
     .footer{position:fixed;left:0;right:0;bottom:0;background:#fff;box-shadow:0 -2px 5px rgba(0,0,0,.05);padding:8px;display:flex;gap:8px}
     .footer button{flex:1;padding:12px 0;font-size:1rem;border:none;border-radius:4px;cursor:pointer}
-    .primary{background:#007bff;color:#fff}.secondary{background:#6c757d;color:#fff}.danger{background:#dc3545;color:#fff}
-    .hidden{display:none}
-    .tip{font-size:.9rem;color:#666;margin-top:6px}
+    .primary{background:#007bff;color:#fff}.secondary{background:#6c757d;color:#fff}
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>发票组合计算器 V8.14</h2>
+    <h2>发票组合计算器 V8.14-debug</h2>
 
     <div class="card">
-      <label>目标开票金额</label>
-      <input id="target-input" type="number" placeholder="如 20000">
+      <label>目标金额</label>
+      <input id="target-input" type="number" placeholder="如20000">
 
-      <label>单张发票金额范围</label>
-      <div class="flex">
-        <input id="min-single" type="number" placeholder="下限">
-        <span>—</span>
-        <input id="max-single" type="number" placeholder="上限">
-      </div>
-
-      <div class="two-cols">
-        <div>
-          <label>相同金额发票张数上限</label>
-          <input id="max-same-count" type="number" placeholder="留空表示不限">
-        </div>
-        <div>
-          <label>发票张数</label>
-          <input id="invoice-count" type="number" placeholder="留空表示不限">
-        </div>
-      </div>
-
-      <!-- 近似匹配开关 -->
-      <div class="two-cols">
-        <div>
-          <input type="checkbox" id="allow-approx">
-          <label for="allow-approx">允许误差最小匹配（返回多方案）</label>
-        </div>
-        <div>
-          <input type="checkbox" id="only-higher">
-          <label for="only-higher">匹配金额不得小于目标</label>
-        </div>
-      </div>
-
-      <label>公司抬头</label>
-      <textarea id="company-header" rows="2" placeholder="行1：公司名称
-行2：统一社会信用代码"></textarea>
-      <div id="header-history"></div>
-
-      <div class="tip">库存数据来自同目录下的 <b>inventory.json</b>。替换该文件即可更新库存。</div>
+      <label><input type="checkbox" id="allow-approx">允许误差最小匹配</label><br>
+      <label><input type="checkbox" id="only-higher">匹配金额不得小于目标</label>
     </div>
 
     <div class="card">
-      <h3>导出结果</h3>
+      <h3>结果输出</h3>
       <div id="result-output"></div>
     </div>
 
-    <div class="accordion">
-      <div class="accordion-header">
-        <span>删除记录（最近10条）</span>
-        <div class="arrow"></div>
-      </div>
-      <div class="accordion-content" id="record-list"></div>
+    <div class="card">
+      <h3>调试输出</h3>
+      <div id="debug-log"></div>
     </div>
   </div>
 
   <div class="footer">
     <button id="combine-btn" class="primary">一键组合</button>
-    <button id="copy-btn" class="secondary">复制结果</button>
-    <button id="confirm-delete-btn" class="danger hidden">确认删除</button>
   </div>
 
 <script>
-  /* ====== 数据存取 ====== */
-  let inventory = [];
-  let deleteRecords = JSON.parse(localStorage.getItem('deleteRecords')||'[]');
+let inventory=[{order:"A",amount:1000},{order:"B",amount:950},{order:"C",amount:1200},{order:"D",amount:880},{order:"E",amount:620}];
 
-  function makeKey(o){ return `${o.order}|${Number(o.amount)}`; }
-  function normalizeInventory(raw){
-    const map = new Map();
-    (raw||[]).forEach(o=>{
-      const k = makeKey(o);
-      if(!map.has(k)){ map.set(k, {order:String(o.order), amount:Number(o.amount)}) }
-    });
-    return Array.from(map.values());
-  }
-  const saveInventory = ()=>localStorage.setItem('invoiceInventory', JSON.stringify(inventory));
-  const saveDeleteRecords = ()=>localStorage.setItem('deleteRecords', JSON.stringify(deleteRecords));
-  const loadHeaderHistory = ()=>JSON.parse(localStorage.getItem('headerHistory')||'[]');
-  const saveHeaderHistory = h=>{
-    if(!h) return; let arr = loadHeaderHistory().filter(x=>x!==h);
-    arr.unshift(h); if(arr.length>10) arr.pop();
-    localStorage.setItem('headerHistory', JSON.stringify(arr));
-  };
+function log(msg){
+  document.getElementById("debug-log").textContent+=msg+"\n";
+}
 
-  async function loadInventory(){
-    try{
-      const res = await fetch('inventory.json', {cache:'no-store'});
-      if(!res.ok) throw new Error('fetch failed');
-      const data = await res.json();
-      const local = JSON.parse(localStorage.getItem('invoiceInventory')||'null');
-      inventory = normalizeInventory(local || data);
-      saveInventory();
-    }catch(e){
-      alert('未找到 inventory.json 或读取失败，请将其与 index.html 放在同一目录。');
-      inventory = normalizeInventory(JSON.parse(localStorage.getItem('invoiceInventory')||'[]'));
+function subsetMinOrders(target, arr){
+  const dp=Array(target+1).fill(null); dp[0]={cnt:0,picks:[]};
+  for(let i=0;i<arr.length;i++){
+    const a=arr[i].amount|0;
+    for(let s=target;s>=a;s--){
+      if(dp[s-a] && (!dp[s] || dp[s-a].cnt+1 < dp[s].cnt)){
+        dp[s]={cnt:dp[s-a].cnt+1,picks:dp[s-a].picks.concat(i)};
+      }
     }
   }
+  return dp[target];
+}
 
-  function renderHeaderHistory(){
-    const div=document.getElementById('header-history'); div.innerHTML='';
-    loadHeaderHistory().forEach((h,i)=>{
-      const wrap=document.createElement('div'); wrap.className='hdr-item';
-      const txt=document.createElement('button'); txt.className='txt'; txt.textContent=h;
-      txt.onclick=()=>document.getElementById('company-header').value=h;
-      const del=document.createElement('button'); del.className='del'; del.textContent='✕';
-      del.onclick=()=>{ let a=loadHeaderHistory(); a.splice(i,1); localStorage.setItem('headerHistory', JSON.stringify(a)); renderHeaderHistory(); };
-      wrap.appendChild(txt); wrap.appendChild(del); div.appendChild(wrap);
-    });
+function computeApprox(target, arr, onlyHigher){
+  let best=null;
+  for(let offset=1;offset<=500;offset++){
+    let candidates=[];
+    if(!onlyHigher) candidates.push(target-offset);
+    candidates.push(target+offset);
+    for(const t of candidates){
+      if(t<=0) continue;
+      const res=subsetMinOrders(t,arr);
+      if(res){return {sum:t,res};}
+    }
   }
-  function renderDeleteRecords(){
-    const list=document.getElementById('record-list'); list.innerHTML='';
-    deleteRecords.slice(0,10).forEach((batch,i)=>{
-      const invoiceCount=batch.length;
-      const total=batch.reduce((s,inv)=>s+inv.sum,0);
-      const item=document.createElement('div'); item.className='record-item';
-      let html=`批次 ${i+1}：共 ${invoiceCount} 张发票，合计 ${total} 元<br><div class="orders">`;
-      batch.forEach(inv=>inv.orders.forEach(o=>{ html+=`订单号：${o.order}，金额：${o.amount}元<br>`; }));
-      html+='</div>'; item.innerHTML=html;
-      const btn=document.createElement('button'); btn.className='record-item btn-recover'; btn.textContent='恢复';
-      btn.onclick=()=>{
-        const rec=deleteRecords.splice(i,1)[0];
-        const set=new Set(inventory.map(makeKey));
-        rec.forEach(inv=>inv.orders.forEach(o=>{ const k=makeKey(o); if(!set.has(k)){ set.add(k); inventory.push({order:o.order,amount:o.amount}); }}));
-        inventory=normalizeInventory(inventory);
-        saveDeleteRecords(); saveInventory(); renderDeleteRecords();
-      };
-      item.appendChild(btn); list.appendChild(item);
-    });
+  return best;
+}
+
+document.getElementById("combine-btn").onclick=()=>{
+  document.getElementById("result-output").textContent="";
+  document.getElementById("debug-log").textContent="";
+  const tgt=+document.getElementById("target-input").value;
+  const allowApprox=document.getElementById("allow-approx").checked;
+  const onlyHigher=document.getElementById("only-higher").checked;
+
+  log("开始计算，目标="+tgt+"，允许近似="+allowApprox+"，不得小于目标="+onlyHigher);
+
+  let exact=subsetMinOrders(tgt,inventory);
+  if(exact){
+    log("找到精确匹配");
+    document.getElementById("result-output").textContent="精确匹配 "+tgt+" 元";
+    return;
   }
-
-  /* ====== 精确 DP 与拆票（保持 V8.10 逻辑） ====== */
-  function subsetMinOrders(target, arr){
-    const dp=Array(target+1).fill(null); dp[0]={cnt:0,picks:[]};
-    for(let i=0;i<arr.length;i++){
-      const a=arr[i].amount|0;
-      for(let s=target;s>=a;s--){
-        if(dp[s-a] && (!dp[s] || dp[s-a].cnt+1 < dp[s].cnt)){
-          dp[s]={cnt:dp[s-a].cnt+1,picks:dp[s-a].picks.concat(i)};
-        }
-      }
+  if(allowApprox){
+    log("精确匹配失败，开始近似搜索 ±500");
+    let approx=computeApprox(tgt,inventory,onlyHigher);
+    if(approx){
+      let diff=approx.sum-tgt;
+      log("找到近似结果 sum="+approx.sum+" 误差="+diff);
+      document.getElementById("result-output").textContent="近似匹配 "+approx.sum+" 元 (目标 "+tgt+"，误差 "+diff+")";
+      return;
     }
-    return dp[target];
   }
-  function bestSubsetInRange(avail, lo, hi){
-    const maxSum = Math.min(hi, avail.reduce((a,o)=>a+o.amount,0));
-    const dp=Array(maxSum+1).fill(null); dp[0]={cnt:0,picks:[]};
-    for(let i=0;i<avail.length;i++){
-      const a=avail[i].amount|0;
-      for(let s=maxSum;s>=a;s--){
-        if(dp[s-a] && (!dp[s] || dp[s-a].cnt+1 < dp[s].cnt)){
-          dp[s]={cnt:dp[s-a].cnt+1,picks:dp[s-a].picks.concat(i)};
-        }
-      }
-    }
-    for(let s=maxSum; s>=Math.max(1,lo); s--){
-      if(dp[s] && s>=lo && s<=hi) return {sum:s, picks:dp[s].picks};
-    }
-    return null;
-  }
-  function splitWithCapBacktrack(selectedOrders, minS, maxS, maxSame){
-    if(!(minS>0) && !(maxS>0)){
-      const total = selectedOrders.reduce((a,o)=>a+o.amount,0);
-      return [{ sum: total, orders: selectedOrders.slice() }];
-    }
-    const lo = (minS>0)?minS:1;
-    const hi = (maxS>0)?maxS:selectedOrders.reduce((a,o)=>a+o.amount,0);
-
-    let avail = selectedOrders.slice();
-    const capMap = new Map();
-    const keyOf = o => `${o.order}|${o.amount}`;
-
-    function genCandidates(av, limit=8){
-      const cands=[];
-      for(let s=hi; s>=lo; s--){
-        if(isFinite(maxSame) && (capMap.get(s)||0) >= maxSame) continue;
-        const probe = bestSubsetInRange(av, s, s);
-        if(probe){ cands.push(probe); if(cands.length>=limit) break; }
-      }
-      if(cands.length===0){
-        const p = bestSubsetInRange(av, lo, hi);
-        if(p && (!isFinite(maxSame) || (capMap.get(p.sum)||0) < maxSame)) cands.push(p);
-      }
-      return cands;
-    }
-
-    const memo = new Set();
-    function sig(av){
-      const hist = new Map();
-      av.forEach(o=>hist.set(o.amount,(hist.get(o.amount)||0)+1));
-      const hm = Array.from(hist.entries()).sort((a,b)=>a[0]-b[0]).map(([k,v])=>k+':'+v).join(',');
-      const cm = Array.from(capMap.entries()).sort((a,b)=>a[0]-b[0]).map(([k,v])=>k+':'+v).join(',');
-      return hm+'|'+cm;
-    }
-
-    function dfs(av){
-      if(av.length===0) return [];
-      const signature = sig(av);
-      if(memo.has(signature)) return null;
-
-      const candList = genCandidates(av, 8);
-      for(const cand of candList){
-        const pick = cand.picks.map(i=>av[i]);
-        const used = new Set(pick.map(keyOf));
-        const rest = av.filter(o=>!used.has(keyOf(o)));
-
-        capMap.set(cand.sum, (capMap.get(cand.sum)||0)+1);
-        const sub = dfs(rest);
-        if(sub){
-          return [{ sum: cand.sum, orders: pick }, ...sub];
-        }
-        capMap.set(cand.sum, capMap.get(cand.sum)-1);
-        if(capMap.get(cand.sum)===0) capMap.delete(cand.sum);
-      }
-
-      memo.add(signature);
-      return null;
-    }
-
-    return dfs(avail);
-  }
-  function solveWithInvoiceCount(target, minS, maxS){
-    const base = inventory.map((o,idx)=>({...o, __uid:`u${idx}`}));
-    function bestSubsetInRangeEx(avail, lo, hi){
-      const maxSum = Math.min(hi, avail.reduce((a,o)=>a+o.amount,0));
-      const dp=Array(maxSum+1).fill(null); dp[0]={cnt:0,picks:[]};
-      for(let i=0;i<avail.length;i++){
-        const a=avail[i].amount|0;
-        for(let s=maxSum;s>=a;s--){
-          if(dp[s-a] && (!dp[s] || dp[s-a].cnt+1 < dp[s].cnt)){
-            dp[s]={cnt:dp[s-a].cnt+1,picks:dp[s-a].picks.concat(i)};
-          }
-        }
-      }
-      for(let s=maxSum; s>=Math.max(1,lo); s--){
-        if(dp[s] && s>=lo && s<=hi) return {sum:s, picks:dp[s].picks};
-      }
-      return null;
-    }
-    function subsetMinOrdersEx(target, arr){
-      const dp=Array(target+1).fill(null); dp[0]={cnt:0,picks:[]};
-      for(let i=0;i<arr.length;i++){
-        const a=arr[i].amount|0;
-        for(let s=target;s>=a;s--){
-          if(dp[s-a] && (!dp[s] || dp[s-a].cnt+1 < dp[s].cnt)){
-            dp[s]={cnt:dp[s-a].cnt+1,picks:dp[s-a].picks.concat(i)};
-          }
-        }
-      }
-      return dp[target];
-    }
-    const memo=new Map();
-    function dfs(remT, k, avail){
-      const key=remT+'|'+k+'|'+avail.length;
-      if(memo.has(key)) return memo.get(key);
-      if(k===1){
-        const r=subsetMinOrdersEx(remT, avail);
-        if(!r) { memo.set(key,null); return null; }
-        const pick=r.picks.map(i=>avail[i]);
-        const sum=remT;
-        if((minS && sum<minS) || (maxS && sum>maxS)) { memo.set(key,null); return null; }
-        const res=[{orders: pick.map(x=>({order:x.order,amount:x.amount})), sum}];
-        memo.set(key,res); return res;
-      }
-      const r1 = bestSubsetInRangeEx(avail, (minS||1), Math.min(maxS||remT, remT));
-      if(!r1){ memo.set(key,null); return null; }
-      const trySums=[];
-      for(let s=r1.sum; s>=Math.max(1,(minS||1)); s--){
-        const t=bestSubsetInRangeEx(avail, s, s);
-        if(t) trySums.push(t);
-        if(trySums.length>=8) break;
-      }
-      for(const r of trySums){
-        const pick=r.picks.map(i=>avail[i]);
-        const used=new Set(pick.map(x=>x.__uid));
-        const rest=avail.filter(x=>!used.has(x.__uid));
-        const sub=dfs(remT-r.sum, k-1, rest);
-        if(sub){ const res=[{orders: pick.map(x=>({order:x.order,amount:x.amount})), sum:r.sum}, ...sub]; memo.set(key,res); return res; }
-      }
-      memo.set(key,null); return null;
-    }
-    return { dfs, base };
-  }
-
-  /* ====== 近似匹配：窗口化 TypedArray DP + 超时退化 ====== */
-  const APPROX_CONF = {
-    TIME_BUDGET_MS: 450,      // 单次近似计算时间预算（避免卡死）
-    MAX_ITEMS_APPROX: 1200,   // 近似时最多参与的订单数（按金额降序取前N）
-    TOP_K: 5                  // 返回的最多方案数
-  };
-
-  // 在 [0..high] 上构建 DP（最少订单数），带时间预算与 TypedArray 加速
-  function buildDPBandFast(arr, high, timeBudgetMs){
-    const t0 = performance.now();
-    const cnt = new Int32Array(high+1); cnt.fill(-1); cnt[0]=0;
-    const prevSum = new Int32Array(high+1); prevSum.fill(-1);
-    const prevIdx = new Int32Array(high+1); prevIdx.fill(-1);
-
-    for(let i=0;i<arr.length;i++){
-      const a = arr[i].amount|0;
-      for(let s=high; s>=a; s--){
-        const cs = cnt[s-a];
-        if(cs>=0){
-          const nc = cs+1;
-          if(cnt[s]===-1 || nc<cnt[s]){
-            cnt[s]=nc; prevSum[s]=s-a; prevIdx[s]=i;
-          }
-        }
-      }
-      if((i&7)===0 && performance.now()-t0 > timeBudgetMs){
-        return {cnt, prevSum, prevIdx, aborted:true};
-      }
-    }
-    return {cnt, prevSum, prevIdx, aborted:false};
-  }
-  function reconstructPicks(sum, prevSum, prevIdx){
-    const picks=[];
-    while(sum>0){
-      const idx = prevIdx[sum];
-      if(idx<0) break;
-      picks.push(idx);
-      sum = prevSum[sum];
-    }
-    return picks.reverse();
-  }
-
-  // 近似（不固定发票张数）
-  function nearestCandidatesNoCount(base, target, minS, maxS, maxSame, onlyHigher){
-    if(base.length===0) return [];
-    // 金额降序 + 限定最大参与条数（加速）
-    const sorted = base.slice().sort((a,b)=>b.amount-a.amount).slice(0, APPROX_CONF.MAX_ITEMS_APPROX);
-
-    const totalSum = sorted.reduce((a,o)=>a+o.amount,0);
-    if(totalSum===0) return [];
-
-    let band = Math.max(500, Math.floor(target*0.05));    // 初始搜索带宽
-    const maxBand = Math.max(5000, Math.floor(target*0.5)); // 最大带宽
-    const topK = APPROX_CONF.TOP_K;
-
-    while (band <= maxBand){
-      const low  = onlyHigher ? target : Math.max(1, target - band);
-      const high = Math.min(totalSum, target + band);
-
-      const {cnt, prevSum, prevIdx, aborted} = buildDPBandFast(sorted, high, APPROX_CONF.TIME_BUDGET_MS);
-      const cand = [];
-      const seen = new Set();
-      const maxD = Math.max(target-low, high-target);
-      for(let d=0; d<=maxD && cand.length < topK*3; d++){
-        const s1 = target - d;
-        const s2 = target + d;
-        if(!onlyHigher && s1>=low && cnt[s1]>=0 && !seen.has(s1)){
-          cand.push({sum:s1, cnt:cnt[s1], picks: reconstructPicks(s1,prevSum,prevIdx), diff:d});
-          seen.add(s1);
-        }
-        if(s2!==s1 && s2<=high && cnt[s2]>=0 && !seen.has(s2)){
-          cand.push({sum:s2, cnt:cnt[s2], picks: reconstructPicks(s2,prevSum,prevIdx), diff:d});
-          seen.add(s2);
-        }
-      }
-
-      const plans=[];
-      cand.sort((a,b)=>a.diff-b.diff || a.cnt-b.cnt);
-      for(const c of cand){
-        const selected = c.picks.map(i=>sorted[i]);
-        const split = splitWithCapBacktrack(selected, minS, maxS, maxSame);
-        if(split){
-          plans.push({ total:c.sum, diff:Math.abs(c.sum-target), ordersCount:c.cnt, invoices:split });
-          if(plans.length>=topK) break;
-        }
-      }
-      if(plans.length>0) return plans;
-      if(!aborted){
-        // 没找到但未超时 → 扩大带宽
-        band = Math.min(maxBand, band*2);
-      }else{
-        // 超时 → 退化为增量外扩精确搜索（安全、不卡）
-        return incrementalScanExact(sorted, target, minS, maxS, maxSame, onlyHigher, topK);
-      }
-    }
-    return [];
-  }
-
-  // 超时退化：从目标向外逐步尝试“精确解”，找到就停（最多尝试若干次）
-  function incrementalScanExact(arr, target, minS, maxS, maxSame, onlyHigher, topK){
-    const plans=[];
-    const maxTries = 400; // 硬上限，防止长时间计算
-    let tries=0;
-    const lowStart = onlyHigher ? target : Math.max(1, target-1000);
-    const highEnd  = target+1000;
-
-    for(let d=0; tries<maxTries && plans.length<topK; d++){
-      const tryList=[];
-      if(!onlyHigher){
-        const s1 = target - d;
-        if(s1>=lowStart) tryList.push(s1);
-      }
-      const s2 = target + d;
-      if(s2<=highEnd && (tryList.length===0 || s2!==tryList[0])) tryList.push(s2);
-
-      for(const t of tryList){
-        tries++;
-        const rec = subsetMinOrders(t, arr); // 最少订单命中
-        if(rec){
-          const selected = rec.picks.map(i=>arr[i]);
-          const split = splitWithCapBacktrack(selected, minS, maxS, maxSame);
-          if(split){
-            plans.push({ total:t, diff:Math.abs(t-target), ordersCount:rec.cnt, invoices:split });
-            if(plans.length>=topK) break;
-          }
-        }
-        if(tries>=maxTries) break;
-      }
-      if( (onlyHigher && (target+d)>=highEnd) || (!onlyHigher && (target-d)<lowStart && (target+d)>highEnd) ) break;
-    }
-    plans.sort((a,b)=>a.diff-b.diff || a.ordersCount-b.ordersCount);
-    return plans;
-  }
-
-  // 近似（固定发票张数）采用增量外扩（solveWithInvoiceCount 计算量较大）
-  function nearestCandidatesWithCount(target, minS, maxS, invoiceCount, onlyHigher){
-    const plans=[];
-    const maxTries = 300;
-    let tries=0;
-    const lowStart = onlyHigher ? target : Math.max(1, target-1000);
-    const highEnd  = target+1000;
-
-    for(let d=0; tries<maxTries && plans.length<APPROX_CONF.TOP_K; d++){
-      const tryList=[];
-      if(!onlyHigher){
-        const s1 = target - d;
-        if(s1>=lowStart) tryList.push(s1);
-      }
-      const s2 = target + d;
-      if(s2<=highEnd && (tryList.length===0 || s2!==tryList[0])) tryList.push(s2);
-
-      for(const t of tryList){
-        tries++;
-        const { dfs, base } = solveWithInvoiceCount(t, minS, maxS);
-        const res = dfs(t, invoiceCount, base);
-        if(res){
-          const cnt = res.reduce((acc,inv)=>acc + inv.orders.length, 0);
-          plans.push({ total:t, diff:Math.abs(t-target), ordersCount:cnt, invoices:res });
-          if(plans.length>=APPROX_CONF.TOP_K) break;
-        }
-        if(tries>=maxTries) break;
-      }
-      if( (onlyHigher && (target+d)>=highEnd) || (!onlyHigher && (target-d)<lowStart && (target+d)>highEnd) ) break;
-    }
-    plans.sort((a,b)=>a.diff-b.diff || a.ordersCount-b.ordersCount);
-    return plans;
-  }
-
-  /* ====== 总控（精确优先，近似多方案） ====== */
-  function computeInvoicesMulti(target, minS, maxS, maxSame, invoiceCount, allowApprox, onlyHigher){
-    const base = normalizeInventory(inventory);
-    if(!base.length) return {plans:[], best:null};
-
-    // 精确优先
-    if(invoiceCount){
-      const { dfs, base: arr } = solveWithInvoiceCount(target, minS, maxS);
-      const exact = dfs(target, invoiceCount, arr);
-      if(exact){
-        return {plans:[{ total:target, diff:0, ordersCount: exact.reduce((a,inv)=>a+inv.orders.length,0), invoices:exact }], best:0};
-      }
-    } else {
-      const rec = subsetMinOrders(target, base);
-      if(rec){
-        const selected = rec.picks.map(i=>base[i]);
-        const exact = splitWithCapBacktrack(selected, minS, maxS, maxSame);
-        if(exact){
-          return {plans:[{ total:target, diff:0, ordersCount:rec.cnt, invoices:exact }], best:0};
-        }
-      }
-    }
-
-    if(!allowApprox) return {plans:[], best:null};
-
-    // 近似
-    let plans=[];
-    if(invoiceCount){
-      plans = nearestCandidatesWithCount(target, minS, maxS, invoiceCount, onlyHigher);
-    }else{
-      plans = nearestCandidatesNoCount(base, target, minS, maxS, maxSame, onlyHigher);
-    }
-    if(plans.length===0) return {plans:[], best:null};
-    return {plans, best:0};
-  }
-
-  /* ====== 页面入口 ====== */
-  document.addEventListener('DOMContentLoaded', async ()=>{
-    await loadInventory();
-    renderHeaderHistory();
-    renderDeleteRecords();
-
-    const accH=document.querySelector('.accordion-header');
-    const accC=document.querySelector('.accordion-content');
-    accH.onclick=()=>{ const open=accC.style.display==='block'; accC.style.display=open?'none':'block'; accH.classList.toggle('open',!open); };
-
-    let lastInv=null; // 方案#1用于删除
-    document.getElementById('combine-btn').onclick=()=>{
-      const tgt=+document.getElementById('target-input').value;
-      if(!tgt) return alert('请输入目标金额');
-      const minS=+document.getElementById('min-single').value||0;
-      const maxS=+document.getElementById('max-single').value||0;
-      if(minS && maxS && minS>maxS) return alert('下限不可大于上限');
-      const msc=+document.getElementById('max-same-count').value||Infinity;
-      const ic =+document.getElementById('invoice-count').value||0;
-      const allowApprox=document.getElementById('allow-approx').checked;
-      const onlyHigher=document.getElementById('only-higher').checked;
-      const header=document.getElementById('company-header').value.trim();
-      saveHeaderHistory(header); renderHeaderHistory();
-
-      const {plans, best} = computeInvoicesMulti(tgt,minS,maxS,msc,ic,allowApprox,onlyHigher);
-      if(plans.length===0){
-        const hint = allowApprox ? '（已在限时范围内尝试近似搜索，仍无合法方案）' : '';
-        return alert('无法组合出满足条件的金额' + hint);
-      }
-
-      const out=[];
-      if(plans[0].diff!==0){
-        out.push(`⚠️ 未找到精确 ${tgt}，以下为“最接近”方案（误差优先，其次订单更少）`);
-        if(onlyHigher) out.push(`（已启用“不得小于目标”，仅展示 ≥ ${tgt} 的方案）`);
-        out.push('');
-      }
-      plans.slice(0, APPROX_CONF.TOP_K).forEach((p,idx)=>{
-        const sign = p.total>=tgt ? '+'+(p.total-tgt) : '-'+(tgt-p.total);
-        out.push(`—— 方案#${idx+1}：实际 ${p.total}（目标 ${tgt}，误差 ${sign}），总订单≈${p.ordersCount}`);
-        p.invoices.forEach((inv,i)=>{
-          out.push(`发票${i+1}：${inv.sum}元${inv.orders.length>1?'（相关订单合并）':''}`);
-          inv.orders.forEach(o=> out.push(`订单号：${o.order}，金额：${o.amount}元`));
-        });
-        out.push('');
-      });
-      if(header) out.push(header,'');
-      out.push('不需要备注','568881753@qq.com');
-
-      document.getElementById('result-output').textContent=out.join('\n');
-
-      lastInv = plans[best||0].invoices;
-      document.getElementById('confirm-delete-btn').classList.remove('hidden');
-    };
-
-    document.getElementById('confirm-delete-btn').onclick=()=>{
-      if(!lastInv) return;
-      deleteRecords.unshift(lastInv);
-      const removeSet=new Set(lastInv.flatMap(inv=>inv.orders.map(makeKey)));
-      inventory = inventory.filter(o=>!removeSet.has(makeKey(o)));
-      saveDeleteRecords(); saveInventory(); renderDeleteRecords();
-      document.getElementById('confirm-delete-btn').classList.add('hidden');
-    };
-
-    document.getElementById('copy-btn').onclick=()=>{
-      navigator.clipboard.writeText(document.getElementById('result-output').textContent);
-      alert('结果已复制');
-    };
-  });
+  log("没有找到任何组合");
+  document.getElementById("result-output").textContent="无法组合出满足条件的金额";
+};
 </script>
 </body>
 </html>
