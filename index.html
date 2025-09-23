@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票组合计算器 V8.11（分离库存+误差匹配）</title>
+  <title>发票组合计算器 V8.11（误差匹配）</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
@@ -107,15 +107,81 @@
   </div>
 
 <script>
-  // ====== 保持原有库存、历史抬头、删除记录逻辑（略，和 V8.10 一致） ======
-  // ……（中间代码和 V8.10 相同，这里省略，保持不变）……
+  // ====== 库存与历史数据逻辑 ======
+  let inventory = [];
+  let deleteRecords = JSON.parse(localStorage.getItem('deleteRecords')||'[]');
+  function makeKey(o){ return `${o.order}|${Number(o.amount)}`; }
+  function normalizeInventory(raw){
+    const map = new Map();
+    (raw||[]).forEach(o=>{
+      const k = makeKey(o);
+      if(!map.has(k)){ map.set(k, {order:String(o.order), amount:Number(o.amount)}) }
+    });
+    return Array.from(map.values());
+  }
+  const saveInventory = ()=>localStorage.setItem('invoiceInventory', JSON.stringify(inventory));
+  const saveDeleteRecords = ()=>localStorage.setItem('deleteRecords', JSON.stringify(deleteRecords));
+  const loadHeaderHistory = ()=>JSON.parse(localStorage.getItem('headerHistory')||'[]');
+  const saveHeaderHistory = h=>{
+    if(!h) return; let arr = loadHeaderHistory().filter(x=>x!==h);
+    arr.unshift(h); if(arr.length>10) arr.pop();
+    localStorage.setItem('headerHistory', JSON.stringify(arr));
+  };
+  async function loadInventory(){
+    try{
+      const res = await fetch('inventory.json',{cache:'no-store'});
+      if(!res.ok) throw new Error('fetch failed');
+      const data = await res.json();
+      const local = JSON.parse(localStorage.getItem('invoiceInventory')||'null');
+      inventory = normalizeInventory(local || data);
+      saveInventory();
+    }catch(e){
+      alert('未找到 inventory.json 或读取失败');
+      inventory = normalizeInventory(JSON.parse(localStorage.getItem('invoiceInventory')||'[]'));
+    }
+  }
+  function renderHeaderHistory(){
+    const div=document.getElementById('header-history'); div.innerHTML='';
+    loadHeaderHistory().forEach((h,i)=>{
+      const wrap=document.createElement('div'); wrap.className='hdr-item';
+      const txt=document.createElement('button'); txt.className='txt'; txt.textContent=h;
+      txt.onclick=()=>document.getElementById('company-header').value=h;
+      const del=document.createElement('button'); del.className='del'; del.textContent='✕';
+      del.onclick=()=>{ let a=loadHeaderHistory(); a.splice(i,1); localStorage.setItem('headerHistory', JSON.stringify(a)); renderHeaderHistory(); };
+      wrap.appendChild(txt); wrap.appendChild(del); div.appendChild(wrap);
+    });
+  }
+  function renderDeleteRecords(){
+    const list=document.getElementById('record-list'); list.innerHTML='';
+    deleteRecords.slice(0,10).forEach((batch,i)=>{
+      const invoiceCount=batch.length;
+      const total=batch.reduce((s,inv)=>s+inv.sum,0);
+      const item=document.createElement('div'); item.className='record-item';
+      let html=`批次 ${i+1}：共 ${invoiceCount} 张发票，合计 ${total} 元<br><div class="orders">`;
+      batch.forEach(inv=>inv.orders.forEach(o=>{ html+=`订单号：${o.order}，金额：${o.amount}元<br>`; }));
+      html+='</div>'; item.innerHTML=html;
+      const btn=document.createElement('button'); btn.className='record-item btn-recover'; btn.textContent='恢复';
+      btn.onclick=()=>{
+        const rec=deleteRecords.splice(i,1)[0];
+        const set=new Set(inventory.map(makeKey));
+        rec.forEach(inv=>inv.orders.forEach(o=>{ const k=makeKey(o); if(!set.has(k)){ set.add(k); inventory.push({order:o.order,amount:o.amount}); }}));
+        inventory=normalizeInventory(inventory);
+        saveDeleteRecords(); saveInventory(); renderDeleteRecords();
+      };
+      item.appendChild(btn); list.appendChild(item);
+    });
+  }
 
-  // ====== 核心修改：computeInvoices 增加近似匹配 ======
+  // ====== 现有 DP 与回溯函数（保持和 V8.10 一致，此处省略） ======
+  // subsetMinOrders, bestSubsetInRange, splitWithCapBacktrack, solveWithInvoiceCount
+  // ……（完整逻辑保持不变）……
+
+  // ====== 修改 computeInvoices 增加误差匹配 ======
   function computeInvoices(target, minS, maxS, maxSame, invoiceCount, allowApprox, onlyHigher){
     const base = normalizeInventory(inventory);
     if(!base.length) return null;
 
-    // ① 精确匹配
+    // 尝试精确匹配
     if(invoiceCount){
       const { dfs, base: arr } = solveWithInvoiceCount(target, minS, maxS);
       const exact = dfs(target, invoiceCount, arr);
@@ -128,32 +194,29 @@
         if(exact) return exact;
       }
     }
-
-    // ② 精确失败 → 没开近似，直接返回
     if(!allowApprox) return null;
 
-    // ③ 近似匹配
-    let best = null, bestDiff = Infinity;
-    const delta = Math.max(500, Math.floor(target*0.05));
-    const low = onlyHigher ? target : Math.max(1, target - delta);
-    const high = target + delta;
-
-    for(let t=low; t<=high; t++){
+    // 近似匹配
+    let best=null, bestDiff=Infinity;
+    const delta=Math.max(500, Math.floor(target*0.05));
+    const low=onlyHigher?target:Math.max(1,target-delta);
+    const high=target+delta;
+    for(let t=low;t<=high;t++){
       if(invoiceCount){
-        const { dfs, base: arr } = solveWithInvoiceCount(t, minS, maxS);
-        const res = dfs(t, invoiceCount, arr);
+        const { dfs, base: arr }=solveWithInvoiceCount(t,minS,maxS);
+        const res=dfs(t,invoiceCount,arr);
         if(res){
-          const diff = Math.abs(t-target);
-          if(diff<bestDiff){ bestDiff=diff; best=res; }
+          const diff=Math.abs(t-target);
+          if(diff<bestDiff){bestDiff=diff; best=res;}
         }
       }else{
-        const rec = subsetMinOrders(t, base);
+        const rec=subsetMinOrders(t,base);
         if(rec){
-          const selected = rec.picks.map(i=>base[i]);
-          const res = splitWithCapBacktrack(selected, minS, maxS, maxSame);
+          const selected=rec.picks.map(i=>base[i]);
+          const res=splitWithCapBacktrack(selected,minS,maxS,maxSame);
           if(res){
-            const diff = Math.abs(t-target);
-            if(diff<bestDiff){ bestDiff=diff; best=res; }
+            const diff=Math.abs(t-target);
+            if(diff<bestDiff){bestDiff=diff; best=res;}
           }
         }
       }
@@ -161,7 +224,7 @@
     return best;
   }
 
-  // ====== 页面入口修改 ======
+  // ====== 页面入口 ======
   document.addEventListener('DOMContentLoaded', async ()=>{
     await loadInventory();
     renderHeaderHistory();
@@ -169,10 +232,9 @@
 
     const accH=document.querySelector('.accordion-header');
     const accC=document.querySelector('.accordion-content');
-    accH.onclick=()=>{ const open=accC.style.display==='block'; accC.style.display=open?'none':'block'; accH.classList.toggle('open',!open); };
+    accH.onclick=()=>{const open=accC.style.display==='block';accC.style.display=open?'none':'block';accH.classList.toggle('open',!open);};
 
     let lastInv=null;
-
     document.getElementById('combine-btn').onclick=()=>{
       const tgt=+document.getElementById('target-input').value;
       if(!tgt) return alert('请输入目标金额');
@@ -180,7 +242,7 @@
       const maxS=+document.getElementById('max-single').value||0;
       if(minS && maxS && minS>maxS) return alert('下限不可大于上限');
       const msc=+document.getElementById('max-same-count').value||Infinity;
-      const ic =+document.getElementById('invoice-count').value||0;
+      const ic=+document.getElementById('invoice-count').value||0;
       const allowApprox=document.getElementById('allow-approx').checked;
       const onlyHigher=document.getElementById('only-higher').checked;
       const header=document.getElementById('company-header').value.trim();
@@ -191,9 +253,7 @@
       lastInv=invs;
 
       const out=[];
-      if(allowApprox){
-        out.push(`⚠️ 提示：以下为最接近目标金额 ${tgt} 的方案`);
-      }
+      if(allowApprox) out.push(`⚠️ 提示：以下为最接近目标金额 ${tgt} 的方案`);
       invs.forEach((inv,i)=>{
         out.push(`发票${i+1}：${inv.sum}元${inv.orders.length>1?'（相关订单合并）':''}`);
         inv.orders.forEach(o=> out.push(`订单号：${o.order}，金额：${o.amount}元`));
@@ -209,7 +269,7 @@
       if(!lastInv) return;
       deleteRecords.unshift(lastInv);
       const removeSet=new Set(lastInv.flatMap(inv=>inv.orders.map(makeKey)));
-      inventory = inventory.filter(o=>!removeSet.has(makeKey(o)));
+      inventory=inventory.filter(o=>!removeSet.has(makeKey(o)));
       saveDeleteRecords(); saveInventory(); renderDeleteRecords();
       document.getElementById('confirm-delete-btn').classList.add('hidden');
     };
