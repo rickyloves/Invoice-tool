@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票组合计算器 V8.25</title>
+  <title>发票组合计算器 V8.26（发票优先拆分）</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
@@ -42,7 +42,7 @@
 </head>
 <body>
   <div class="container">
-    <h2>发票组合计算器 V8.25</h2>
+    <h2>发票组合计算器 V8.26</h2>
 
     <div class="card">
       <label>目标开票金额</label>
@@ -184,7 +184,6 @@ function renderHeaderHistory(){
     wrap.appendChild(txt); wrap.appendChild(del); div.appendChild(wrap);
   });
 }
-
 function renderDeleteRecords(){
   const list=document.getElementById('record-list'); list.innerHTML='';
   deleteRecords.slice(0,10).forEach((batch,i)=>{
@@ -207,7 +206,7 @@ function renderDeleteRecords(){
   });
 }
 
-/* ===== 折叠绑定（修正：绑定到内容元素本身） ===== */
+/* ===== 折叠绑定 ===== */
 function bindAccordion(headerEl, contentEl){
   headerEl.addEventListener('click', ()=>{
     const open = contentEl.style.display==='block';
@@ -216,24 +215,7 @@ function bindAccordion(headerEl, contentEl){
   });
 }
 
-/* ===== 计算核心（与 8.24 一致） ===== */
-// 精确最少订单凑 target
-function subsetMinOrders(target, arr){
-  if(target<=0) return null;
-  const total = arr.reduce((a,o)=>a+o.amount,0);
-  if(target>total) return null;
-  const dp=Array(target+1).fill(null); dp[0]={cnt:0,picks:[]};
-  for(let i=0;i<arr.length;i++){
-    const a=arr[i].amount|0;
-    for(let s=target;s>=a;s--){
-      if(dp[s-a] && (!dp[s] || dp[s-a].cnt+1 < dp[s].cnt)){
-        dp[s]={cnt:dp[s-a].cnt+1,picks:dp[s-a].picks.concat(i)};
-      }
-    }
-  }
-  return dp[target];
-}
-// 区间最佳子集（[lo,hi]）
+/* ====== 基础 DP 工具（与 8.25 一致） ====== */
 function bestSubsetInRange(avail, lo, hi){
   const maxSum = Math.min(hi, avail.reduce((a,o)=>a+o.amount,0));
   const dp=Array(maxSum+1).fill(null); dp[0]={cnt:0,picks:[]};
@@ -250,284 +232,138 @@ function bestSubsetInRange(avail, lo, hi){
   }
   return null;
 }
-// 按范围 + 相同金额上限拆票（回溯）
-function splitWithCapBacktrack(selectedOrders, minS, maxS, maxSame){
-  if(!(minS>0) && !(maxS>0)){
-    const total = selectedOrders.reduce((a,o)=>a+o.amount,0);
-    return [{ sum: total, orders: selectedOrders.slice() }];
-  }
-  const lo = (minS>0)?minS:1;
-  const hi = (maxS>0)?maxS:selectedOrders.reduce((a,o)=>a+o.amount,0);
 
-  let avail = selectedOrders.slice();
-  const capMap = new Map();
+/* ====== 新：发票优先求解器 ======
+   直接在全库存上，逐张生成 [lo,hi] 的发票（每张由多个订单组成），
+   使所有发票金额和 ≈ target（精确或近似），并满足相同金额上限。
+*/
+function planByInvoicesExact(base, target, lo, hi, maxSame, invoiceCount){
+  // 剪枝：目标过大/过小
+  const total = base.reduce((a,o)=>a+o.amount,0);
+  if(target<=0 || target>total) return null;
+
+  const capMap = new Map(); // 金额 -> 已出现次数
   const keyOf = o => `${o.order}|${o.amount}`;
 
+  // 生成候选发票（金额从大到小，优先接近 hi），并限制候选宽度
   function genCandidates(av, limit=8){
     const cands=[];
-    for(let s=hi; s>=lo; s--){
+    for(let s=Math.min(hi, target); s>=lo; s--){
       if(isFinite(maxSame) && (capMap.get(s)||0) >= maxSame) continue;
-      const probe = bestSubsetInRange(av, s, s);
+      const probe = bestSubsetInRange(av, s, s); // 该发票内部订单最少
       if(probe){ cands.push(probe); if(cands.length>=limit) break; }
     }
+    // 没有 exact 候选，就给一个区间最大兜底
     if(cands.length===0){
-      const p = bestSubsetInRange(av, lo, hi);
+      const p = bestSubsetInRange(av, lo, Math.min(hi, target));
       if(p && (!isFinite(maxSame) || (capMap.get(p.sum)||0) < maxSame)) cands.push(p);
     }
     return cands;
   }
 
+  // 记忆化签名：剩余金额直方图 + capMap + 剩余目标
   const memo = new Set();
-  function sig(av){
+  function sig(av, rem){
     const hist = new Map();
     av.forEach(o=>hist.set(o.amount,(hist.get(o.amount)||0)+1));
     const hm = Array.from(hist.entries()).sort((a,b)=>a[0]-b[0]).map(([k,v])=>k+':'+v).join(',');
     const cm = Array.from(capMap.entries()).sort((a,b)=>a[0]-b[0]).map(([k,v])=>k+':'+v).join(',');
-    return hm+'|'+cm;
+    return rem+'|'+hm+'|'+cm;
   }
 
-  function dfs(av){
-    if(av.length===0) return [];
-    const signature = sig(av);
+  function dfs(av, rem, kLeft){
+    if(rem===0) return [];
+    if(rem<lo) return null;
+    if(kLeft!==null && kLeft<=0) return null;
+
+    // 上界剪枝：可达的最大金额
+    const maxAvail = Math.min(rem, av.reduce((a,o)=>a+o.amount,0));
+    if(maxAvail < Math.min(lo, rem)) return null;
+
+    const signature = sig(av, rem);
     if(memo.has(signature)) return null;
 
     const candList = genCandidates(av, 8);
     for(const cand of candList){
+      if(!cand) continue;
+      if(cand.sum>rem) continue; // 超过剩余目标就跳过
+
       const pick = cand.picks.map(i=>av[i]);
       const used = new Set(pick.map(keyOf));
       const rest = av.filter(o=>!used.has(keyOf(o)));
 
       capMap.set(cand.sum, (capMap.get(cand.sum)||0)+1);
-      const sub = dfs(rest);
+      const sub = dfs(rest, rem - cand.sum, kLeft===null?null:(kLeft-1));
       if(sub){
         return [{ sum: cand.sum, orders: pick }, ...sub];
       }
       capMap.set(cand.sum, capMap.get(cand.sum)-1);
       if(capMap.get(cand.sum)===0) capMap.delete(cand.sum);
     }
+
     memo.add(signature);
     return null;
   }
 
-  return dfs(avail);
-}
-// 固定发票张数
-function solveWithInvoiceCount(target, minS, maxS){
-  const base = inventory.map((o,idx)=>({...o, __uid:`u${idx}`}));
-  function bestSubsetInRangeEx(avail, lo, hi){
-    const maxSum = Math.min(hi, avail.reduce((a,o)=>a+o.amount,0));
-    const dp=Array(maxSum+1).fill(null); dp[0]={cnt:0,picks:[]};
-    for(let i=0;i<avail.length;i++){
-      const a=avail[i].amount|0;
-      for(let s=maxSum;s>=a;s--){
-        if(dp[s-a] && (!dp[s] || dp[s-a].cnt+1 < dp[s].cnt)){
-          dp[s]={cnt:dp[s-a].cnt+1,picks:dp[s-a].picks.concat(i)};
-        }
-      }
-    }
-    for(let s=maxSum; s>=Math.max(1,lo); s--){
-      if(dp[s] && s>=lo && s<=hi) return {sum:s, picks:dp[s].picks};
-    }
-    return null;
-  }
-  function subsetMinOrdersEx(target, arr){
-    const dp=Array(target+1).fill(null); dp[0]={cnt:0,picks:[]};
-    for(let i=0;i<arr.length;i++){
-      const a=arr[i].amount|0;
-      for(let s=target;s>=a;s--){
-        if(dp[s-a] && (!dp[s] || dp[s-a].cnt+1 < dp[s].cnt)){
-          dp[s]={cnt:dp[s-a].cnt+1,picks:dp[s-a].picks.concat(i)};
-        }
-      }
-    }
-    return dp[target];
-  }
-  const memo=new Map();
-  function dfs(remT, k, avail){
-    const key=remT+'|'+k+'|'+avail.length;
-    if(memo.has(key)) return memo.get(key);
-    if(k===1){
-      const r=subsetMinOrdersEx(remT, avail);
-      if(!r) { memo.set(key,null); return null; }
-      const pick=r.picks.map(i=>avail[i]);
-      const sum=remT;
-      if((minS && sum<minS) || (maxS && sum>maxS)) { memo.set(key,null); return null; }
-      const res=[{orders: pick.map(x=>({order:x.order,amount:x.amount})), sum}];
-      memo.set(key,res); return res;
-    }
-    const r1 = bestSubsetInRangeEx(avail, (minS||1), Math.min(maxS||remT, remT));
-    if(!r1){ memo.set(key,null); return null; }
-    const trySums=[];
-    for(let s=r1.sum; s>=Math.max(1,(minS||1)); s--){
-      const t=bestSubsetInRangeEx(avail, s, s);
-      if(t) trySums.push(t);
-      if(trySums.length>=8) break;
-    }
-    for(const r of trySums){
-      const pick=r.picks.map(i=>avail[i]);
-      const used=new Set(pick.map(x=>x.__uid));
-      const rest=avail.filter(x=>!used.has(x.__uid));
-      const sub=dfs(remT-r.sum, k-1, rest);
-      if(sub){ const res=[{orders: pick.map(x=>({order:x.order,amount:x.amount})), sum:r.sum}, ...sub]; memo.set(key,res); return res; }
-    }
-    memo.set(key,null); return null;
-  }
-  return { dfs, base };
+  const kInit = invoiceCount ? invoiceCount : null;
+  return dfs(base.slice(), target, kInit);
 }
 
-/* ===== 近似匹配（带时间预算） ===== */
-const APPROX = { START_BAND: 500, MAX_BAND: 5000, TIME_BUDGET_MS: 500, MAX_ITEMS: 1200, TOP_K: 5, TRY_LIMIT: 1200 };
+/* 近似：在 [low, high] 带宽内尝试 planByInvoicesExact */
+function planByInvoicesApprox(base, target, lo, hi, maxSame, invoiceCount, onlyHigher){
+  const total = base.reduce((a,o)=>a+o.amount,0);
+  const START_BAND = Math.max(500, Math.floor(target*0.05));
+  const MAX_BAND   = 5000;
 
-function buildDPBandFast(arr, high, timeBudgetMs){
-  const n = high+1;
-  const cnt     = new Int32Array(n); cnt.fill(-1); cnt[0]=0;
-  const prevSum = new Int32Array(n); prevSum.fill(-1);
-  const prevIdx = new Int32Array(n); prevIdx.fill(-1);
-  const t0 = (performance&&performance.now)?performance.now():Date.now();
-
-  for(let i=0;i<arr.length;i++){
-    const a = arr[i].amount|0;
-    for(let s=high; s>=a; s--){
-      const cs = cnt[s-a];
-      if(cs>=0){
-        const nc = cs+1;
-        if(cnt[s]===-1 || nc<cnt[s]){
-          cnt[s]=nc; prevSum[s]=s-a; prevIdx[s]=i;
-        }
-      }
-    }
-    if((i&7)===0){
-      const t1 = (performance&&performance.now)?performance.now():Date.now();
-      if(t1 - t0 > timeBudgetMs){
-        log(`DP 预算用尽（已处理 ${i+1}/${arr.length} 条）`);
-        return {cnt,prevSum,prevIdx,aborted:true};
-      }
-    }
-  }
-  return {cnt,prevSum,prevIdx,aborted:false};
-}
-function reconstructPicks(sum, prevSum, prevIdx){
-  const picks=[];
-  while(sum>0){
-    const i = prevIdx[sum];
-    if(i<0) break;
-    picks.push(i);
-    sum = prevSum[sum];
-  }
-  return picks.reverse();
-}
-function nearestPlansNoFixedCount(base, target, minS, maxS, maxSame, onlyHigher){
-  if(base.length===0) return [];
-  const sorted = base.slice().sort((a,b)=>b.amount-a.amount).slice(0, APPROX.MAX_ITEMS);
-  const total  = sorted.reduce((a,o)=>a+o.amount,0);
-  if(onlyHigher && total < target){ log('onlyHigher=是，但库存总额 < 目标，注定无解'); return []; }
-
-  let band = Math.max(APPROX.START_BAND, Math.floor(target*0.05));
-  band = Math.min(band, APPROX.MAX_BAND);
-
-  while(band <= APPROX.MAX_BAND){
+  let band = Math.min(START_BAND, MAX_BAND);
+  while(band<=MAX_BAND){
     const low  = onlyHigher ? target : Math.max(1, target-band);
     const high = Math.min(total, target+band);
-    if(low>high){ band *= 2; continue; }
+    log(`发票优先近似：尝试范围 [${low}, ${high}]（±${band}）`);
 
-    log(`近似搜索：范围 [${low}, ${high}]（±${band}），items=${sorted.length}`);
-    const {cnt,prevSum,prevIdx,aborted} = buildDPBandFast(sorted, high, APPROX.TIME_BUDGET_MS);
-
-    const cand=[];
+    // 交替尝试 target-d 与 target+d（onlyHigher 只试 >=target）
     const seen=new Set();
     const maxD=Math.max(target-low, high-target);
-    let tries=0;
-    for(let d=0; d<=maxD && cand.length<APPROX.TOP_K*3 && tries<APPROX.TRY_LIMIT; d++){
-      if(!onlyHigher){
-        const s1=target-d;
-        if(s1>=low && cnt[s1]>=0 && !seen.has(s1)){ cand.push(s1); seen.add(s1); }
-      }
-      const s2=target+d;
-      if(s2<=high && cnt[s2]>=0 && !seen.has(s2)){ cand.push(s2); seen.add(s2); }
-      tries += 2;
-    }
-
-    const plans=[];
-    for(const s of cand){
-      const picks = reconstructPicks(s, prevSum, prevIdx).map(i=>sorted[i]);
-      const split = splitWithCapBacktrack(picks, minS, maxS, maxSame);
-      if(split){
-        plans.push({ total:s, diff:Math.abs(s-target), ordersCount:picks.length, invoices:split });
-        if(plans.length>=APPROX.TOP_K) break;
-      }
-    }
-    if(plans.length>0){
-      plans.sort((a,b)=>a.diff-b.diff || a.ordersCount-b.ordersCount);
-      return plans.slice(0, APPROX.TOP_K);
-    }
-
-    if(aborted){ log('DP 超时，扩大带宽后再试'); }
-    band = Math.min(APPROX.MAX_BAND, band*2);
-  }
-  return [];
-}
-function nearestPlansFixedCount(base, target, minS, maxS, maxSame, invoiceCount, onlyHigher){
-  const total = base.reduce((a,o)=>a+o.amount,0);
-  const bandList = [300,700,1200,2000,3000];
-  const plans=[];
-  for(const band of bandList){
-    const low  = onlyHigher ? target : Math.max(1, target-band);
-    const high = Math.min(total, target+band);
-    log(`固定张数近似：范围 [${low}, ${high}]（±${band}）`);
-    let tries=0;
-    for(let d=0; d<=band && tries<600 && plans.length<APPROX.TOP_K; d+= (d<200?10:50)){
+    for(let d=0; d<=maxD; d+= (d<200?10:50)){
       const tryList=[];
-      if(!onlyHigher){ const s1=target-d; if(s1>=low) tryList.push(s1); }
-      const s2=target+d; if(s2<=high) tryList.push(s2);
-      for(const s of tryList){
-        tries++;
-        const { dfs, base: arr } = solveWithInvoiceCount(s, minS, maxS);
-        const exact = dfs(s, invoiceCount, arr);
-        if(exact){
-          plans.push({
-            total:s, diff:Math.abs(s-target),
-            ordersCount: exact.reduce((a,inv)=>a+inv.orders.length,0),
-            invoices: exact
-          });
-          if(plans.length>=APPROX.TOP_K) break;
-        }
+      if(!onlyHigher){ const s1=target-d; if(s1>=low && !seen.has(s1)) tryList.push(s1); }
+      const s2=target+d; if(s2<=high && !seen.has(s2)) tryList.push(s2);
+      for(const t of tryList){
+        seen.add(t);
+        const plan = planByInvoicesExact(base, t, lo, hi, maxSame, invoiceCount);
+        if(plan) return { total:t, invoices:plan };
       }
     }
-    if(plans.length>0){
-      plans.sort((a,b)=>a.diff-b.diff || a.ordersCount-b.ordersCount);
-      return plans.slice(0, APPROX.TOP_K);
-    }
+    band = Math.min(MAX_BAND, band*2);
   }
-  return [];
+  return null;
 }
+
+/* ====== 兼容旧逻辑的总控（精确→发票优先→近似） ====== */
 function computeInvoicesMulti(target, minS, maxS, maxSame, invoiceCount, allowApprox, onlyHigher){
   const base = normalizeInventory(inventory);
   if(!base.length) return {plans:[], best:null};
 
-  // 精确优先
-  if(invoiceCount){
-    const { dfs, base: arr } = solveWithInvoiceCount(target, minS, maxS);
-    const exact = dfs(target, invoiceCount, arr);
-    if(exact){
-      return {plans:[{ total:target, diff:0, ordersCount: exact.reduce((a,inv)=>a+inv.orders.length,0), invoices:exact }], best:0};
-    }
-  }else{
-    const rec = subsetMinOrders(target, base);
-    if(rec){
-      const selected = rec.picks.map(i=>base[i]);
-      const exact = splitWithCapBacktrack(selected, minS, maxS, maxSame);
-      if(exact){
-        return {plans:[{ total:target, diff:0, ordersCount:rec.cnt, invoices:exact }], best:0};
-      }
+  const lo = (minS>0)?minS:1;
+  const hi = (maxS>0)?maxS:base.reduce((a,o)=>a+o.amount,0);
+
+  // 1) 先试：发票优先（避免先选到不可拆的订单）
+  const exactPlan = planByInvoicesExact(base, target, lo, hi, maxSame, invoiceCount||null);
+  if(exactPlan){
+    return {plans:[{ total:target, diff:0, ordersCount: exactPlan.reduce((a,inv)=>a+inv.orders.length,0), invoices: exactPlan }], best:0};
+  }
+
+  // 2) 再试：近似（同样走发票优先）
+  if(allowApprox){
+    const approx = planByInvoicesApprox(base, target, lo, hi, maxSame, invoiceCount||null, onlyHigher);
+    if(approx){
+      const plan = approx.invoices;
+      return {plans:[{ total:approx.total, diff:Math.abs(approx.total-target), ordersCount: plan.reduce((a,inv)=>a+inv.orders.length,0), invoices: plan }], best:0};
     }
   }
 
-  // 近似（可选）
-  if(!allowApprox) return {plans:[], best:null};
-  const plans = invoiceCount
-    ? nearestPlansFixedCount(base, target, minS, maxS, maxSame, invoiceCount, onlyHigher)
-    : nearestPlansNoFixedCount(base, target, minS, maxS, maxSame, onlyHigher);
-  return {plans, best: plans.length?0:null};
+  // 3) 兜底：无解
+  return {plans:[], best:null};
 }
 
 /* ===== 入口与事件 ===== */
@@ -536,11 +372,10 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   renderHeaderHistory();
   renderDeleteRecords();
 
-  // 折叠默认收起（修正：删除记录绑定到内容本身）
   const debugH=document.getElementById('debug-acc-header');
   const debugC=document.getElementById('debug-acc-content');
   const delH=document.getElementById('del-acc-header');
-  const delC=document.getElementById('record-list'); // <-- 修正点
+  const delC=document.getElementById('record-list');
   debugC.style.display='none'; delC.style.display='none';
   bindAccordion(debugH, debugC);
   bindAccordion(delH, delC);
@@ -572,19 +407,19 @@ document.addEventListener('DOMContentLoaded', async ()=>{
       const header=document.getElementById('company-header').value.trim();
       saveHeaderHistory(header); renderHeaderHistory();
 
-      log(`开始：target=${tgt}, 范围=[${minS||'-'},${maxS||'-'}], sameCap=${isFinite(msc)?msc:'不限'}, 固定张数=${ic||'不限'}, 近似=${allowApprox}, 不小于=${onlyHigher}`);
+      log(`开始：target=${tgt}, 发票范围=[${minS||'-'},${maxS||'-'}], sameCap=${isFinite(msc)?msc:'不限'}, 固定张数=${ic||'不限'}, 近似=${allowApprox}, 不小于=${onlyHigher}`);
       const baseTotal = inventory.reduce((a,o)=>a+o.amount,0);
       log(`库存总金额=${baseTotal}，订单条数=${inventory.length}`);
 
       const {plans, best} = computeInvoicesMulti(tgt,minS,maxS,msc,ic,allowApprox,onlyHigher);
       if(!plans || plans.length===0){
-        const hint = allowApprox ? '（已进行近似搜索，最多±5000）' : '';
+        const hint = allowApprox ? '（已进行近似搜索）' : '';
         outEl.textContent='无法组合出满足条件的金额'+hint;
         debugC.style.display='block'; debugH.classList.add('open');
         return;
       }
 
-      // 简洁导出格式
+      // 简洁导出格式（与 8.25 一致）
       const chosen = plans[best||0];
       const out=[];
       chosen.invoices.forEach((inv,i)=>{
@@ -607,20 +442,16 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 
   document.getElementById('confirm-delete-btn').onclick=()=>{
     if(!lastInv) return;
-    // 1) 写入删除记录并持久化
     deleteRecords.unshift(lastInv);
     saveDeleteRecords();
-    // 2) 从库存移除并持久化
     const removeSet=new Set(lastInv.flatMap(inv=>inv.orders.map(makeKey)));
     inventory = inventory.filter(o=>!removeSet.has(makeKey(o)));
     saveInventory();
-    // 3) 重新渲染 + 自动展开删除记录折叠
     renderDeleteRecords();
     const delH=document.getElementById('del-acc-header');
     const delC=document.getElementById('record-list');
     delC.style.display='block';
     delH.classList.add('open');
-    // 4) 隐藏确认删除按钮
     document.getElementById('confirm-delete-btn').classList.add('hidden');
     log(`已执行删除；库存剩余 ${inventory.length} 条；删除记录总批次=${deleteRecords.length}`);
   };
