@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票组合计算器 V8.24</title>
+  <title>发票组合计算器 V8.25</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
@@ -42,7 +42,7 @@
 </head>
 <body>
   <div class="container">
-    <h2>发票组合计算器 V8.24</h2>
+    <h2>发票组合计算器 V8.25</h2>
 
     <div class="card">
       <label>目标开票金额</label>
@@ -101,13 +101,13 @@
       </div>
     </div>
 
-    <!-- 删除记录 -->
+    <!-- 删除记录（最近10条） -->
     <div class="accordion">
       <div class="accordion-header" id="del-acc-header">
         <span>删除记录（最近10条）</span>
         <div class="arrow"></div>
       </div>
-      <div class="accordion-content" id="record-list"></div>
+      <div class="accordion-content" id="record-list" style="display:none;"></div>
     </div>
   </div>
 
@@ -184,6 +184,7 @@ function renderHeaderHistory(){
     wrap.appendChild(txt); wrap.appendChild(del); div.appendChild(wrap);
   });
 }
+
 function renderDeleteRecords(){
   const list=document.getElementById('record-list'); list.innerHTML='';
   deleteRecords.slice(0,10).forEach((batch,i)=>{
@@ -206,7 +207,7 @@ function renderDeleteRecords(){
   });
 }
 
-/* ===== 折叠绑定 ===== */
+/* ===== 折叠绑定（修正：绑定到内容元素本身） ===== */
 function bindAccordion(headerEl, contentEl){
   headerEl.addEventListener('click', ()=>{
     const open = contentEl.style.display==='block';
@@ -215,7 +216,7 @@ function bindAccordion(headerEl, contentEl){
   });
 }
 
-/* ===== 计算核心（保持与 8.21 一致） ===== */
+/* ===== 计算核心（与 8.24 一致） ===== */
 // 精确最少订单凑 target
 function subsetMinOrders(target, arr){
   if(target<=0) return null;
@@ -374,7 +375,7 @@ function solveWithInvoiceCount(target, minS, maxS){
   return { dfs, base };
 }
 
-/* ===== 近似匹配（带时间预算，防卡死） ===== */
+/* ===== 近似匹配（带时间预算） ===== */
 const APPROX = { START_BAND: 500, MAX_BAND: 5000, TIME_BUDGET_MS: 500, MAX_ITEMS: 1200, TOP_K: 5, TRY_LIMIT: 1200 };
 
 function buildDPBandFast(arr, high, timeBudgetMs){
@@ -535,11 +536,11 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   renderHeaderHistory();
   renderDeleteRecords();
 
-  // 折叠默认收起
+  // 折叠默认收起（修正：删除记录绑定到内容本身）
   const debugH=document.getElementById('debug-acc-header');
   const debugC=document.getElementById('debug-acc-content');
   const delH=document.getElementById('del-acc-header');
-  const delC=document.getElementById('record-list').parentElement;
+  const delC=document.getElementById('record-list'); // <-- 修正点
   debugC.style.display='none'; delC.style.display='none';
   bindAccordion(debugH, debugC);
   bindAccordion(delH, delC);
@@ -579,12 +580,11 @@ document.addEventListener('DOMContentLoaded', async ()=>{
       if(!plans || plans.length===0){
         const hint = allowApprox ? '（已进行近似搜索，最多±5000）' : '';
         outEl.textContent='无法组合出满足条件的金额'+hint;
-        // 失败时自动展开调试
         debugC.style.display='block'; debugH.classList.add('open');
         return;
       }
 
-      // 简洁导出格式（与 8.10 一致）
+      // 简洁导出格式
       const chosen = plans[best||0];
       const out=[];
       chosen.invoices.forEach((inv,i)=>{
@@ -601,19 +601,28 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     }catch(err){
       log('运行异常：'+(err&&err.message?err.message:String(err)));
       alert('计算时出现异常，请展开“调试输出”查看详情。');
-      // 出错时展开调试
       debugC.style.display='block'; debugH.classList.add('open');
     }
   };
 
   document.getElementById('confirm-delete-btn').onclick=()=>{
     if(!lastInv) return;
+    // 1) 写入删除记录并持久化
     deleteRecords.unshift(lastInv);
     saveDeleteRecords();
+    // 2) 从库存移除并持久化
     const removeSet=new Set(lastInv.flatMap(inv=>inv.orders.map(makeKey)));
     inventory = inventory.filter(o=>!removeSet.has(makeKey(o)));
-    saveInventory(); renderDeleteRecords();
+    saveInventory();
+    // 3) 重新渲染 + 自动展开删除记录折叠
+    renderDeleteRecords();
+    const delH=document.getElementById('del-acc-header');
+    const delC=document.getElementById('record-list');
+    delC.style.display='block';
+    delH.classList.add('open');
+    // 4) 隐藏确认删除按钮
     document.getElementById('confirm-delete-btn').classList.add('hidden');
+    log(`已执行删除；库存剩余 ${inventory.length} 条；删除记录总批次=${deleteRecords.length}`);
   };
 
   document.getElementById('copy-btn').onclick=()=>{
