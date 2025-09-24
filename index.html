@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票组合计算器 V8.31</title>
+  <title>发票组合计算器 V8.32</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
@@ -43,7 +43,7 @@
 </head>
 <body>
   <div class="container">
-    <h2>发票组合计算器 V8.31</h2>
+    <h2>发票组合计算器 V8.32</h2>
 
     <div class="card">
       <label>目标开票金额</label>
@@ -110,9 +110,9 @@
   </div>
 
 <script>
-let inventory = [];
-let deleteRecords = JSON.parse(localStorage.getItem('deleteRecords')||'[]');
-let headerHistory = JSON.parse(localStorage.getItem('headerHistory')||'[]');
+let inventory=[];
+let deleteRecords=JSON.parse(localStorage.getItem('deleteRecords')||'[]');
+let headerHistory=JSON.parse(localStorage.getItem('headerHistory')||'[]');
 const saveDeleteRecords=()=>localStorage.setItem('deleteRecords',JSON.stringify(deleteRecords));
 const saveInventory=()=>localStorage.setItem('invoiceInventory',JSON.stringify(inventory));
 
@@ -150,13 +150,12 @@ function renderDeleteRecords(){
   });
 }
 
-// 运算逻辑（保持 8.28 的正确性）
+// 精确+近似匹配
 function computeInvoices(target,minS,maxS,allowApprox,noLess){
   const arr=inventory.slice();
   const total=arr.reduce((s,o)=>s+o.amount,0);
   log(`开始计算:目标=${target},库存总额=${total}`);
 
-  // 精确DP
   let dp=Array(target+1).fill(null); dp[0]=[];
   for(let o of arr){
     for(let s=target;s>=o.amount;s--){
@@ -167,7 +166,6 @@ function computeInvoices(target,minS,maxS,allowApprox,noLess){
 
   if(!allowApprox){log("精确匹配失败，未启用近似");return null;}
 
-  // 近似搜索
   let best=null,bestErr=Infinity;
   for(let s=target-500;s<=target+500;s++){
     if(s<0) continue;
@@ -186,16 +184,21 @@ function computeInvoices(target,minS,maxS,allowApprox,noLess){
   log("近似匹配失败");return null;
 }
 
-// 拆发票
+// 拆发票（严格区间）
 function splitInvoices(orders,minS,maxS){
-  if(!minS&&!maxS) return [{sum:orders.reduce((s,o)=>s+o.amount,0),orders}];
-  let res=[],cur=[],sum=0;
-  for(let o of orders){
-    if(sum+o.amount<=maxS||!maxS){cur.push(o);sum+=o.amount;}
-    else{if(sum>0)res.push({sum,orders:cur});cur=[o];sum=o.amount;}
-    if((!minS||sum>=minS)&&(!maxS||sum<=maxS)){res.push({sum,orders:cur});cur=[];sum=0;}
+  const res=[];const used=new Array(orders.length).fill(false);
+  function dfs(start,cur){
+    if(start>=orders.length){if(cur.length){const sum=cur.reduce((s,o)=>s+o.amount,0);if((!minS||sum>=minS)&&(!maxS||sum<=maxS))res.push({sum,orders:cur.slice()});}return;}
+    // 尝试加入当前订单
+    cur.push(orders[start]);
+    const sum=cur.reduce((s,o)=>s+o.amount,0);
+    if((!maxS||sum<=maxS))dfs(start+1,cur);
+    cur.pop();
+    // 当前订单单独成发票
+    if(cur.length){const s2=cur.reduce((s,o)=>s+o.amount,0);if((!minS||s2>=minS)&&(!maxS||s2<=maxS))res.push({sum:s2,orders:cur.slice()});cur.length=0;}
+    dfs(start+1,cur);
   }
-  if(cur.length&&sum>0)res.push({sum,orders:cur});
+  dfs(0,[]);
   return res.filter(inv=>inv.sum>0);
 }
 
