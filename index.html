@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票组合计算器 V8.22</title>
+  <title>发票组合计算器 V8.23</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
@@ -42,7 +42,7 @@
 </head>
 <body>
   <div class="container">
-    <h2>发票组合计算器 V8.22</h2>
+    <h2>发票组合计算器 V8.23</h2>
 
     <div class="card">
       <label>目标开票金额</label>
@@ -91,7 +91,7 @@
       <div id="result-output"></div>
     </div>
 
-    <!-- 调试输出 -->
+    <!-- 调试输出（默认收起） -->
     <div class="accordion">
       <div class="accordion-header" id="debug-acc-header">
         <span>调试输出（点击展开/收起）</span>
@@ -120,6 +120,11 @@
   </div>
 
 <script>
+/* ====================
+   计算逻辑保持与 V8.21 完全一致
+   （省略 computeInvoicesMulti 等函数，不做任何改动）
+   ==================== */
+
 let inventory = [];
 let deleteRecords = JSON.parse(localStorage.getItem('deleteRecords')||'[]');
 let lastInv=null;
