@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票组合计算器 V8.29</title>
+  <title>发票组合计算器 V8.30</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
@@ -42,7 +42,7 @@
 </head>
 <body>
   <div class="container">
-    <h2>发票组合计算器 V8.29</h2>
+    <h2>发票组合计算器 V8.30</h2>
 
     <div class="card">
       <label>目标开票金额</label>
@@ -82,7 +82,7 @@
 行2：统一社会信用代码"></textarea>
       <div id="header-history"></div>
 
-      <div class="tip">库存来自 <b>inventory.json</b>。替换后请点 <b>重置库存</b>。</div>
+      <div class="tip">库存来自 <b>inventory.json</b>。替换后可点 <b>重置库存</b> 刷新缓存。</div>
     </div>
 
     <div class="card">
@@ -90,7 +90,7 @@
       <div id="result-output"></div>
     </div>
 
-    <!-- 删除记录（最近10条） -->
+    <!-- 删除记录 -->
     <div class="accordion">
       <div class="accordion-header" id="del-acc-header">
         <span>删除记录（最近10条）</span>
@@ -99,7 +99,7 @@
       <div class="accordion-content" id="record-list" style="display:none;"></div>
     </div>
 
-    <!-- 调试输出（在页面最底部，默认收起） -->
+    <!-- 调试日志（最底部，默认收起） -->
     <div class="accordion">
       <div class="accordion-header" id="debug-acc-header">
         <span>调试日志（点击展开/收起）</span>
@@ -119,7 +119,7 @@
   </div>
 
 <script>
-/* ===== 状态与工具 ===== */
+/* ================= 状态/工具 ================= */
 let inventory = [];
 let deleteRecords = JSON.parse(localStorage.getItem('deleteRecords')||'[]');
 const saveDeleteRecords = ()=>localStorage.setItem('deleteRecords', JSON.stringify(deleteRecords));
@@ -132,16 +132,28 @@ const saveHeaderHistory=h=>{
 };
 function log(m){ const el=document.getElementById('debug-log'); const t=new Date().toLocaleTimeString(); el.textContent+=`[${t}] ${m}\n`; }
 
-/* ===== 库存加载（缓存优先） ===== */
+function normalizeInventory(raw){
+  // 去重 + 运行期统一转整数金额（避免浮点导致 DP 失效；导出本来也用整数）
+  const map = new Map();
+  (raw||[]).forEach(o=>{
+    const amt = Math.round(Number(o.amount)||0);
+    const obj = {order:String(o.order), amount:amt};
+    const k = obj.order+'|'+obj.amount;
+    if(!map.has(k)) map.set(k, obj);
+  });
+  return Array.from(map.values());
+}
+
+/* ================ 库存加载（缓存优先） ================ */
 async function loadInventory(forceReset=false){
   if(!forceReset){
     const local = JSON.parse(localStorage.getItem('invoiceInventory')||'null');
-    if(local){ inventory = local; log(`从缓存读取：${inventory.length} 条`); return; }
+    if(local){ inventory = normalizeInventory(local); log(`从缓存读取：${inventory.length} 条`); return; }
   }
   try{
     const res=await fetch('inventory.json',{cache:'no-store'});
     const data=await res.json();
-    inventory=data; saveInventory();
+    inventory=normalizeInventory(data); saveInventory();
     if(forceReset){
       deleteRecords=[]; saveDeleteRecords();
       localStorage.removeItem('headerHistory');
@@ -152,7 +164,7 @@ async function loadInventory(forceReset=false){
   }catch(e){ alert('未找到 inventory.json，请与 index.html 同目录。'); inventory=[]; }
 }
 
-/* ===== UI 渲染 ===== */
+/* ================= UI ================= */
 function renderHeaderHistory(){
   const div=document.getElementById('header-history'); div.innerHTML='';
   loadHeaderHistory().forEach((h,i)=>{
@@ -177,18 +189,16 @@ function renderDeleteRecords(){
     btn.onclick=()=>{
       const rec=deleteRecords.splice(i,1)[0];
       rec.forEach(inv=>inv.orders.forEach(o=>inventory.push({order:o.order,amount:o.amount})));
-      saveDeleteRecords(); saveInventory(); renderDeleteRecords(); log(`已恢复批次 ${i+1}`);
+      inventory = normalizeInventory(inventory);
+      saveDeleteRecords(); saveInventory(); renderDeleteRecords();
+      log(`已恢复批次 ${i+1}`);
     };
     item.appendChild(btn); list.appendChild(item);
   });
 }
-
-/* 折叠绑定 */
 function bindAccordion(h, c){ h.addEventListener('click',()=>{ const open=c.style.display==='block'; c.style.display=open?'none':'block'; h.classList.toggle('open',!open); }); }
 
-/* ===== 8.10 逻辑：先凑总额（订单级）→ 再拆成发票 ===== */
-
-// 精确最少订单凑 target
+/* ============== 8.10 订单级凑总额（最少订单） ============== */
 function subsetMinOrders(target, arr){
   if(target<=0) return null;
   const total = arr.reduce((a,o)=>a+o.amount,0);
@@ -205,62 +215,95 @@ function subsetMinOrders(target, arr){
   return dp[target];
 }
 
-// 在已选订单里，拆成 [lo,hi] 的发票；含“相同金额上限”限制
-function splitSelectedWithCap(selected, lo, hi, maxSame){
-  if(!(lo>0) && !(hi>0)){
-    const total = selected.reduce((a,o)=>a+o.amount,0);
-    return [{sum:total, orders:selected.slice()}];
-  }
-  const avail = selected.slice();
-  const capMap = new Map();
-  const keyOf = o => `${o.order}|${o.amount}`;
-
-  function bestSubsetInRange(av, lo, hi){
-    const maxSum = Math.min(hi, av.reduce((a,o)=>a+o.amount,0));
-    const dp=Array(maxSum+1).fill(null); dp[0]={cnt:0,picks:[]};
-    for(let i=0;i<av.length;i++){
-      const a=av[i].amount|0;
-      for(let s=maxSum;s>=a;s--){
-        if(dp[s-a] && (!dp[s] || dp[s-a].cnt+1 < dp[s].cnt)){
-          dp[s]={cnt:dp[s-a].cnt+1,picks:dp[s-a].picks.concat(i)};
-        }
+/* ===== 区间内最佳子集（订单最少） ===== */
+function bestSubsetInRange(avail, lo, hi){
+  const maxSum = Math.min(hi, avail.reduce((a,o)=>a+o.amount,0));
+  const dp=Array(maxSum+1).fill(null); dp[0]={cnt:0,picks:[]};
+  for(let i=0;i<avail.length;i++){
+    const a=avail[i].amount|0;
+    for(let s=maxSum;s>=a;s--){
+      if(dp[s-a] && (!dp[s] || dp[s-a].cnt+1 < dp[s].cnt)){
+        dp[s]={cnt:dp[s-a].cnt+1,picks:dp[s-a].picks.concat(i)};
       }
     }
-    for(let s=maxSum; s>=Math.max(1,lo); s--){
-      if(dp[s] && s>=lo && s<=hi) return {sum:s, picks:dp[s].picks};
+  }
+  for(let s=maxSum; s>=Math.max(1,lo); s--){
+    if(dp[s] && s>=lo && s<=hi) return {sum:s, picks:dp[s].picks};
+  }
+  return null;
+}
+
+/* ============== 回溯拆票（严格按 [lo,hi]，含相同金额上限） ============== */
+function splitWithCapBacktrack(selectedOrders, minS, maxS, maxSame){
+  if(!(minS>0) && !(maxS>0)){
+    const total = selectedOrders.reduce((a,o)=>a+o.amount,0);
+    return [{ sum: total, orders: selectedOrders.slice() }];
+  }
+  const lo = (minS>0)?minS:1;
+  const hi = (maxS>0)?maxS:selectedOrders.reduce((a,o)=>a+o.amount,0);
+
+  let avail = selectedOrders.slice();
+  const capMap = new Map(); // 发票金额 -> 已出现次数
+  const keyOf = o => `${o.order}|${o.amount}`;
+
+  function genCandidates(av, limit=8){
+    const cands=[];
+    // 为避免宽区间卡顿，对 s 做抽样（最多 24 个点）
+    const step = Math.max(1, Math.floor((hi - lo)/24));
+    for(let s=Math.min(hi, av.reduce((a,o)=>a+o.amount,0)); s>=lo; s-=step){
+      if(isFinite(maxSame) && (capMap.get(s)||0) >= maxSame) continue;
+      const probe = bestSubsetInRange(av, s, s);
+      if(probe){ cands.push(probe); if(cands.length>=limit) break; }
     }
+    if(cands.length===0){
+      const p = bestSubsetInRange(av, lo, hi);
+      if(p && (!isFinite(maxSame) || (capMap.get(p.sum)||0) < maxSame)) cands.push(p);
+    }
+    return cands;
+  }
+
+  const memo = new Set();
+  function sig(av){
+    const hist = new Map();
+    av.forEach(o=>hist.set(o.amount,(hist.get(o.amount)||0)+1));
+    const hm = Array.from(hist.entries()).sort((a,b)=>a[0]-b[0]).map(([k,v])=>k+':'+v).join(',');
+    const cm = Array.from(capMap.entries()).sort((a,b)=>a[0]-b[0]).map(([k,v])=>k+':'+v).join(',');
+    return hm+'|'+cm;
+  }
+
+  function dfs(av){
+    if(av.length===0) return [];
+    const signature = sig(av);
+    if(memo.has(signature)) return null;
+
+    const candList = genCandidates(av, 8);
+    for(const cand of candList){
+      if(!cand) continue;
+      const pick = cand.picks.map(i=>av[i]);
+      const used = new Set(pick.map(keyOf));
+      const rest = av.filter(o=>!used.has(keyOf(o)));
+
+      capMap.set(cand.sum, (capMap.get(cand.sum)||0)+1);
+      const sub = dfs(rest);
+      if(sub){
+        return [{ sum: cand.sum, orders: pick }, ...sub];
+      }
+      // 回溯
+      capMap.set(cand.sum, capMap.get(cand.sum)-1);
+      if(capMap.get(cand.sum)===0) capMap.delete(cand.sum);
+    }
+
+    memo.add(signature);
     return null;
   }
 
-  const res=[];
-  while(avail.length){
-    // 遵守相同金额上限
-    let cand=null;
-    for(let s=Math.min(hi, avail.reduce((a,o)=>a+o.amount,0)); s>=lo; s--){
-      if(isFinite(maxSame) && (capMap.get(s)||0) >= maxSame) continue;
-      const tryS = bestSubsetInRange(avail, s, s);
-      if(tryS){ cand=tryS; break; }
-    }
-    if(!cand){ // 兜底：找区间内最大
-      cand = bestSubsetInRange(avail, lo, hi);
-    }
-    if(!cand) break; // 无法再拆
-    const pick = cand.picks.map(i=>avail[i]);
-    const used = new Set(pick.map(keyOf));
-    // 从可用集合移除
-    for(let i=avail.length-1;i>=0;i--){
-      const o=avail[i]; if(used.has(keyOf(o))) avail.splice(i,1);
-    }
-    capMap.set(cand.sum, (capMap.get(cand.sum)||0)+1);
-    if(cand.sum>0 && pick.length>0) res.push({sum:cand.sum, orders:pick});
-  }
-  return res;
+  return dfs(avail);
 }
 
-// 允许误差最小匹配（±500，支持不得小于）
-function nearestOrders(target, arr, noLess){
+/* ===== 近似：允许误差最小（±500），支持不得小于目标 ===== */
+function nearestOrders(target, arr, onlyHigher){
   let best=null, bestErr=Infinity, bestSum=null;
-  const low = noLess ? target : Math.max(1, target-500);
+  const low = onlyHigher ? target : Math.max(1, target-500);
   const high= target+500;
   for(let t=low; t<=high; t++){
     const dp=Array(t+1).fill(null); dp[0]=[];
@@ -279,17 +322,17 @@ function nearestOrders(target, arr, noLess){
   return best?{orders:best,sum:bestSum}:null;
 }
 
-/* ===== 统一入口 ===== */
+/* ============== 统一入口（回归 8.10 框架） ============== */
 function computeInvoices(target, minS, maxS, maxSame, invoiceCount, allowApprox, onlyHigher){
   const base = inventory.slice();
   const lo = (minS>0)?minS:1;
   const hi = (maxS>0)?maxS:base.reduce((a,o)=>a+o.amount,0);
 
-  // A) 精确：先凑总额（订单最少），再按范围拆票
+  // A) 精确：先凑总额（订单最少），再按范围回溯拆票
   const exact = subsetMinOrders(target, base);
   if(exact){
     const selected = exact.picks.map(i=>base[i]);
-    const invs = splitSelectedWithCap(selected, lo, hi, maxSame);
+    const invs = splitWithCapBacktrack(selected, lo, hi, maxSame);
     if(invs && invs.length) return invs;
   }
 
@@ -297,20 +340,19 @@ function computeInvoices(target, minS, maxS, maxSame, invoiceCount, allowApprox,
   if(allowApprox){
     const near = nearestOrders(target, base, onlyHigher);
     if(near){
-      const invs = splitSelectedWithCap(near.orders, lo, hi, maxSame);
+      const invs = splitWithCapBacktrack(near.orders, lo, hi, maxSame);
       if(invs && invs.length) return invs;
     }
   }
   return null;
 }
 
-/* ===== 入口绑定 ===== */
+/* ================= 入口绑定 ================= */
 document.addEventListener('DOMContentLoaded', async ()=>{
   await loadInventory();
   renderHeaderHistory();
   renderDeleteRecords();
 
-  // 折叠默认收起
   const debugH=document.getElementById('debug-acc-header');
   const debugC=document.getElementById('debug-acc-content');
   const delH=document.getElementById('del-acc-header');
@@ -340,7 +382,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     const maxS=+document.getElementById('max-single').value||0;
     if(minS && maxS && minS>maxS) return alert('下限不可大于上限');
     const msc=+document.getElementById('max-same-count').value||Infinity;
-    const ic =+document.getElementById('invoice-count').value||0; // 预留，当前仍以“最少订单”优先
+    const ic =+document.getElementById('invoice-count').value||0; // 预留
     const allowApprox=document.getElementById('allow-approx').checked;
     const onlyHigher=document.getElementById('only-higher').checked;
     const header=document.getElementById('company-header').value.trim();
@@ -353,12 +395,12 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     const invs = computeInvoices(tgt,minS,maxS,msc,ic,allowApprox,onlyHigher);
     if(!invs || !invs.length){ outEl.textContent='无法组合出满足条件的金额'; debugC.style.display='block'; debugH.classList.add('open'); return; }
 
-    // —— 导出结果（规范换行 & 过滤无效发票） ——
+    // —— 导出（规范换行 & 过滤无效发票） ——
     const out=[];
     invs.filter(x=>x && x.sum>0 && x.orders && x.orders.length>0).forEach((inv,i)=>{
       out.push(`发票${i+1}：${inv.sum}元${inv.orders.length>1?'（相关订单合并）':''}`);
       inv.orders.forEach(o=> out.push(`订单号：${o.order}，金额：${o.amount}元`));
-      out.push(''); // 仅一处空行
+      out.push('');
     });
     if(header) out.push(header,'');
     out.push('不需要备注','568881753@qq.com');
