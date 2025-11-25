@@ -2,10 +2,10 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票组合计算器 (新库版)</title>
+  <title>发票组合计算器 (V9.2 最终版)</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    /* 样式保持 V8.39，背景改为淡绿色以示区别 */
+    /* 样式 V9.2 */
     *{box-sizing:border-box;margin:0;padding:0}
     body{background:#eef7f2;font-family:Arial,Helvetica,sans-serif;color:#333;padding-bottom:108px}
     .container{max-width:480px;margin:18px auto;padding:0 10px}
@@ -43,7 +43,7 @@
 </head>
 <body>
   <div class="container">
-    <h2>发票组合计算器 (新库版)</h2>
+    <h2>发票组合计算器 (V9.2)</h2>
 
     <div class="card">
       <label>目标开票金额</label>
@@ -83,7 +83,7 @@
 行2：统一社会信用代码"></textarea>
       <div id="header-history"></div>
 
-      <div class="tip">库存来自 <b>inventory_new.json</b>。替换后可点 <b>重置库存</b> 刷新缓存。</div>
+      <div class="tip" style="color:#007bff">★ 内置数据源：265条。请点下方 <b>重置库存</b> 刷新缓存。</div>
     </div>
 
     <div class="card">
@@ -118,17 +118,21 @@
   </div>
 
 <script>
-/* ====== 配置区：完全隔离旧版数据 ====== */
+/* ====== 2024-11-25 完整数据 V9.2 (265条) ====== */
+const DATA_SOURCE = [
+{"order":"29844392230","amount":1240},{"order":"29787668582","amount":670},{"order":"29779855398","amount":670},{"order":"29758217446","amount":208},{"order":"29758125414","amount":670},{"order":"29754938534","amount":189},{"order":"29754882022","amount":740},{"order":"29723444262","amount":1180},{"order":"29722926822","amount":189},{"order":"29722933926","amount":590},{"order":"29722673446","amount":1770},{"order":"29722664486","amount":189},{"order":"29722661094","amount":490},{"order":"29722722854","amount":590},{"order":"29722357286","amount":490},{"order":"29722422118","amount":490},{"order":"29722343654","amount":490},{"order":"29721815398","amount":590},{"order":"29722199910","amount":1470},{"order":"29722121958","amount":590},{"order":"29722146598","amount":189},{"order":"29722006502","amount":590},{"order":"29722009638","amount":189},{"order":"29664786726","amount":1345},{"order":"29657407974","amount":960},{"order":"29657049766","amount":960},{"order":"29657089702","amount":1000},{"order":"29657268006","amount":1000},{"order":"29613864934","amount":990},{"order":"29613779238","amount":990},{"order":"29613146918","amount":1194},{"order":"29595224358","amount":1020},{"order":"29594630822","amount":1020},{"order":"29594980966","amount":1020},{"order":"29595121894","amount":1020},{"order":"29595097062","amount":1020},{"order":"29595222822","amount":1020},{"order":"29584577446","amount":1020},{"order":"29585686374","amount":1020},{"order":"29579912422","amount":990},{"order":"29613146918","amount":1194},{"order":"29595224358","amount":1020},{"order":"29594630822","amount":1020},{"order":"29594980966","amount":1020},{"order":"29595121894","amount":1020},{"order":"29595097062","amount":1020},{"order":"29595222822","amount":1020},{"order":"29584577446","amount":1020},{"order":"29585686374","amount":1020},{"order":"29579912422","amount":990},{"order":"29579148454","amount":990},{"order":"29578714086","amount":159},{"order":"29578467110","amount":990},{"order":"29578353894","amount":990},{"order":"29578045286","amount":1020},{"order":"29578181862","amount":1020},{"order":"29578056486","amount":2040},{"order":"29577984294","amount":2040},{"order":"29521294630","amount":1050},{"order":"29521271270","amount":1050},{"order":"29511656678","amount":1050},{"order":"29511582438","amount":1050},{"order":"29503897638","amount":1020},{"order":"29503915686","amount":1020},{"order":"29503479526","amount":1050},{"order":"29503480294","amount":1050},{"order":"29499944230","amount":1000},{"order":"29499944294","amount":1000},{"order":"29498897254","amount":1050},{"order":"29498897702","amount":1050},{"order":"29490917478","amount":1050},{"order":"29490868710","amount":1050},{"order":"29488269734","amount":1000},{"order":"29488521894","amount":1000},{"order":"29488129766","amount":1000},{"order":"29488684390","amount":1000},{"order":"29487024294","amount":1050},{"order":"29487043942","amount":1050},{"order":"29487038182","amount":1050},{"order":"29487022822","amount":1050},{"order":"29475651046","amount":1050},{"order":"29475572838","amount":1050},{"order":"29472654886","amount":1050},{"order":"29472546022","amount":1050},{"order":"29376457638","amount":1050},{"order":"29376618790","amount":1050},{"order":"29372705702","amount":1050},{"order":"29372746918","amount":1050},{"order":"29324981734","amount":1050},{"order":"29325052966","amount":1050},{"order":"29324565990","amount":1050},{"order":"29324610982","amount":1050},{"order":"29324176358","amount":1050},{"order":"29324204646","amount":1050},{"order":"29322723302","amount":2100},{"order":"29321161126","amount":2100},{"order":"29321200934","amount":2100},{"order":"29320710246","amount":3150},{"order":"29320689446","amount":5250},{"order":"29320422758","amount":1050},{"order":"29320229798","amount":2100},{"order":"29320212582","amount":2100},{"order":"29320259878","amount":5250},{"order":"29320237030","amount":1050},{"order":"29320311014","amount":5250},{"order":"29313551014","amount":2100},{"order":"29313528934","amount":5250},{"order":"29313330278","amount":5250},{"order":"29309418406","amount":5250},{"order":"29250020006","amount":1050},{"order":"29250000166","amount":4200},{"order":"29250087014","amount":5250},{"order":"29250059750","amount":1050},{"order":"29250018150","amount":3150},{"order":"29249976614","amount":4200},{"order":"29249801830","amount":5250},{"order":"29240651238","amount":5250},{"order":"29203828262","amount":3150},{"order":"29195981798","amount":1050},{"order":"29195932070","amount":1050},{"order":"29195980582","amount":1050},{"order":"29195981286","amount":1050},{"order":"29195705894","amount":2100},{"order":"29195678438","amount":2100},{"order":"29195667686","amount":1050},{"order":"29195761510","amount":1050},{"order":"29195733798","amount":1050},{"order":"29195721766","amount":1050},{"order":"29195728550","amount":1050},{"order":"29195559462","amount":1050},{"order":"29195615078","amount":1050},{"order":"29195500582","amount":1050},{"order":"29192155750","amount":2100},{"order":"29192157670","amount":2100},{"order":"29187893094","amount":1050},{"order":"29187884390","amount":1050},{"order":"29187450918","amount":1050},{"order":"29187453030","amount":1050},{"order":"29187413158","amount":1050},{"order":"29187431462","amount":1050},{"order":"29186986278","amount":1050},{"order":"29186994662","amount":1050},{"order":"29186704166","amount":1050},{"order":"29186524646","amount":5250},{"order":"29186336294","amount":3150},{"order":"29186354726","amount":3150},{"order":"29175575462","amount":1020},{"order":"29175636582","amount":1020},{"order":"29156266534","amount":3060},{"order":"29156274086","amount":3060},{"order":"29156045670","amount":1020},{"order":"29156085414","amount":1020},{"order":"29155498086","amount":2040},{"order":"29155589734","amount":2040},{"order":"29106863398","amount":229},{"order":"29085307238","amount":169},{"order":"29084841830","amount":845},{"order":"29041101926","amount":398},{"order":"29039226086","amount":995},{"order":"29039009830","amount":1393},{"order":"29038401830","amount":796},{"order":"29018396326","amount":796},{"order":"29008596838","amount":199},{"order":"29007762982","amount":5150},{"order":"29003278694","amount":209},{"order":"28964953318","amount":1010},{"order":"28965073958","amount":1010},{"order":"28957860134","amount":1010},{"order":"28957880934","amount":1010},{"order":"28945928166","amount":1010},{"order":"28945876774","amount":1010},{"order":"28941124646","amount":1010},{"order":"28941227494","amount":1010},{"order":"28940363750","amount":1010},{"order":"28940510694","amount":1010},{"order":"28940484134","amount":1010},{"order":"28940484582","amount":1010},{"order":"28940030374","amount":1010},{"order":"28939941734","amount":1010},{"order":"28939594534","amount":1010},{"order":"28939622054","amount":1010},{"order":"28934446950","amount":1010},{"order":"28934754086","amount":980},{"order":"28922217446","amount":1010},{"order":"28917119142","amount":1010},{"order":"28917546406","amount":1010},{"order":"28916902502","amount":980},{"order":"28916850278","amount":980},{"order":"28915493094","amount":1010},{"order":"28915621542","amount":1010},{"order":"28902560550","amount":980},{"order":"28902630502","amount":980},{"order":"28901966694","amount":980},{"order":"28901861734","amount":980},{"order":"28900709542","amount":980},{"order":"28900711270","amount":980},{"order":"28609574630","amount":1030},{"order":"28510891814","amount":450},{"order":"28510953062","amount":360},{"order":"28192753958","amount":970},{"order":"28192706790","amount":970},{"order":"28191451238","amount":1940},{"order":"28185388710","amount":3000},{"order":"28016488742","amount":990},{"order":"27989546470","amount":990},{"order":"27989054310","amount":990},{"order":"27989195302","amount":960},{"order":"27498602150","amount":2970},{"order":"27498949542","amount":2880},{"order":"27499031206","amount":4950},{"order":"27499056870","amount":4800},{"order":"27497737574","amount":4950},{"order":"27494179878","amount":990},{"order":"27493949158","amount":960},{"order":"27494024038","amount":990},{"order":"27493984614","amount":960},{"order":"27494228902","amount":990},{"order":"27494335398","amount":960},{"order":"27494049126","amount":3840},{"order":"27494017958","amount":3840},{"order":"27493623782","amount":960},{"order":"27493594598","amount":960},{"order":"27493467814","amount":960},{"order":"27493556646","amount":960},{"order":"27493456870","amount":1920},{"order":"27492798118","amount":960},{"order":"27493151398","amount":960},{"order":"27492642150","amount":960},{"order":"27473140390","amount":990},{"order":"27472936230","amount":2970},{"order":"27472964774","amount":990},{"order":"27462561958","amount":2970},{"order":"27460235046","amount":990},{"order":"27460354918","amount":960},{"order":"27460337702","amount":2970},{"order":"27309417766","amount":1020},{"order":"27309158246","amount":1020},{"order":"27309054566","amount":1020},{"order":"27307771942","amount":1020},{"order":"27306899942","amount":2040},{"order":"27266581350","amount":3060},{"order":"27249636582","amount":5100},{"order":"27239209510","amount":5150},{"order":"27232240614","amount":2020},{"order":"27231980262","amount":5050},{"order":"27232397414","amount":5050},{"order":"27231626022","amount":4120},{"order":"27224537510","amount":1010},{"order":"27136238886","amount":1050},{"order":"27136276518","amount":1050},{"order":"27134868582","amount":1050},{"order":"27134126886","amount":3150},{"order":"26790683558","amount":1040},{"order":"26693575462","amount":5050},{"order":"26388819174","amount":4160},{"order":"26373999526","amount":5200},{"order":"26211479910","amount":2060},{"order":"29722082086","amount":1770},{"order":"29722808550","amount":810},{"order":"29722753254","amount":567},{"order":"29722016806","amount":189},{"order":"29722015270","amount":490},{"order":"29721364070","amount":1770},{"order":"29721258726","amount":567},{"order":"29046424358","amount":597}
+];
+
+/* ====== 配置区：完全隔离旧版数据 V9.2 ====== */
 let inventory=[];
-// 下面三个 key 全部加了 _NEW，确保不读旧缓存
-let deleteRecords=JSON.parse(localStorage.getItem('deleteRecords_NEW')||'[]');
-const saveDeleteRecords=()=>localStorage.setItem('deleteRecords_NEW',JSON.stringify(deleteRecords));
-const saveInventory    =()=>localStorage.setItem('invoiceInventory_NEW',JSON.stringify(inventory));
-const loadHeaderHistory=()=>JSON.parse(localStorage.getItem('headerHistory_NEW')||'[]');
+let deleteRecords=JSON.parse(localStorage.getItem('deleteRecords_V9_2')||'[]');
+const saveDeleteRecords=()=>localStorage.setItem('deleteRecords_V9_2',JSON.stringify(deleteRecords));
+const saveInventory    =()=>localStorage.setItem('invoiceInventory_V9_2',JSON.stringify(inventory));
+const loadHeaderHistory=()=>JSON.parse(localStorage.getItem('headerHistory_V9_2')||'[]');
 const saveHeaderHistory=h=>{
   if(!h) return; const arr=loadHeaderHistory().filter(x=>x!==h);
   arr.unshift(h); if(arr.length>10) arr.pop();
-  localStorage.setItem('headerHistory_NEW',JSON.stringify(arr));
+  localStorage.setItem('headerHistory_V9_2',JSON.stringify(arr));
 };
 function log(msg){ const el=document.getElementById('debug-log'); const t=new Date().toLocaleTimeString(); el.textContent+=`[${t}] ${msg}\n`; }
 
@@ -137,26 +141,35 @@ function normalize(raw){
   (raw||[]).forEach(o=>{
     const order=String(o.order); const amount=Math.round(Number(o.amount)||0);
     const k=order+'|'+amount;
+    // 重复项过滤：仅保留一条唯一记录
     if(!map.has(k)) map.set(k,{order,amount});
   });
   return Array.from(map.values());
 }
 const makeKey=o=>o.order+'|'+o.amount;
 
-/* ====== 加载逻辑 ====== */
+/* ====== 加载逻辑 (直接读取内置 DATA_SOURCE) ====== */
 async function loadInventory(forceReset=false){
   if(!forceReset){
-    const local=JSON.parse(localStorage.getItem('invoiceInventory_NEW')||'null');
-    if(local){ inventory=normalize(local); log(`从缓存读取（新库）：${inventory.length} 条`); return; }
+    const local=JSON.parse(localStorage.getItem('invoiceInventory_V9_2')||'null');
+    if(local){ inventory=normalize(local); log(`从缓存读取：${inventory.length} 条`); return; }
   }
-  try{
-    // 这里指向 inventory_new.json
-    const res=await fetch('inventory_new.json',{cache:'no-store'});
-    const data=await res.json();
-    inventory=normalize(data); saveInventory();
-    if(forceReset){ deleteRecords=[]; saveDeleteRecords(); log('已清空删除记录并从文件加载新库存'); }
-    else{ log(`从文件读取（新库）：${inventory.length} 条`); }
-  }catch(e){ alert('未找到 inventory_new.json，请检查文件名！'); inventory=[]; }
+  
+  // 1. 读取内置源数据
+  log(`读取内置源数据：共 ${DATA_SOURCE.length} 条记录...`);
+  
+  // 2. 规范化并去重
+  inventory=normalize(DATA_SOURCE); 
+  saveInventory();
+  
+  const diff = DATA_SOURCE.length - inventory.length;
+  if(forceReset){ 
+    deleteRecords=[]; 
+    saveDeleteRecords(); 
+    log(`已重置。去重后有效库存：${inventory.length} 条 (已自动过滤 ${diff} 条重复记录)`); 
+  } else { 
+    log(`初始化完成。去重后有效库存：${inventory.length} 条 (已自动过滤 ${diff} 条重复记录)`); 
+  }
 }
 
 /* ====== UI 渲染 ====== */
@@ -167,7 +180,7 @@ function renderHeaderHistory(){
     const txt=document.createElement('button'); txt.className='txt'; txt.textContent=h;
     txt.onclick=()=>document.getElementById('company-header').value=h;
     const del=document.createElement('button'); del.className='del'; del.textContent='✕';
-    del.onclick=()=>{ const a=loadHeaderHistory(); a.splice(i,1); localStorage.setItem('headerHistory_NEW',JSON.stringify(a)); renderHeaderHistory(); };
+    del.onclick=()=>{ const a=loadHeaderHistory(); a.splice(i,1); localStorage.setItem('headerHistory_V9_2',JSON.stringify(a)); renderHeaderHistory(); };
     wrap.appendChild(txt); wrap.appendChild(del); div.appendChild(wrap);
   });
 }
@@ -190,7 +203,7 @@ function renderDeleteRecords(){
 }
 function bindAccordion(h,c){ h.addEventListener('click',()=>{ const open=c.style.display==='block'; c.style.display=open?'none':'block'; h.classList.toggle('open',!open); }); }
 
-/* ====== 核心算法（保持 V8.39 原版） ====== */
+/* ====== 核心算法 ====== */
 function selectOrdersByDP(target, maxSingle, allowApprox, onlyHigher){
   const pool = (maxSingle>0)? inventory.filter(o=>o.amount<=maxSingle) : inventory.slice();
   if(pool.length===0) return null;
@@ -408,10 +421,10 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   bindAccordion(delH,delC);
 
   document.getElementById('reset-btn').onclick=async()=>{
-    if(confirm('确定要重置库存吗？这会清空缓存与删除记录！')){
+    if(confirm('确定要重置并恢复初始数据吗？(删除记录将被清空)')){
       await loadInventory(true);
       renderDeleteRecords();
-      alert('库存已重置并刷新。');
+      alert('库存已重置。');
     }
   };
 
