@@ -2,10 +2,10 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票组合计算器 (V9.3 库存修正版)</title>
+  <title>发票组合计算器 (V9.4 订单范围过滤版)</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    /* 样式 V9.3 */
+    /* 样式 V9.4 */
     *{box-sizing:border-box;margin:0;padding:0}
     body{background:#eef7f2;font-family:Arial,Helvetica,sans-serif;color:#333;padding-bottom:108px}
     .container{max-width:480px;margin:18px auto;padding:0 10px}
@@ -35,7 +35,7 @@
     .record-item .orders{margin-top:8px;line-height:1.45}
     .record-item .btn-recover{display:block;margin:10px auto 0;padding:6px 12px;background:#6c757d;color:#fff;border:none;border-radius:4px;font-size:.9rem;cursor:pointer}
     
-    /* V9.3 新增样式：搜索修正区 */
+    /* V9.3/V9.4 搜索修正区 */
     .edit-row{display:flex;gap:6px;align-items:center;margin-top:8px;padding-bottom:8px;border-bottom:1px dashed #eee}
     .edit-row span{font-size:0.85rem;color:#666;flex:1}
     .edit-row input{width:80px;margin-top:0;text-align:center}
@@ -49,15 +49,26 @@
     .primary{background:#007bff;color:#fff}.secondary{background:#6c757d;color:#fff}.danger{background:#dc3545;color:#fff}
     .hidden{display:none}
     .tip{font-size:.9rem;color:#666;margin-top:6px}
+    
+    /* V9.4 范围高亮 */
+    .highlight-label { color: #d63384; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>发票组合计算器 (V9.3)</h2>
+    <h2>发票组合计算器 (V9.4)</h2>
 
     <div class="card">
       <label>目标开票金额</label>
       <input id="target-input" type="number" placeholder="如 20000">
+
+      <label class="highlight-label">订单号范围筛选 (V9.4 新增)</label>
+      <div class="flex">
+        <input id="filter-order-min" type="text" placeholder="起始号 (如 290)">
+        <span>—</span>
+        <input id="filter-order-max" type="text" placeholder="结束号 (不填则不限)">
+      </div>
+      <div class="tip">提示：输入"290"即代表筛选所有以290及更大的订单。</div>
 
       <label>单张发票金额范围</label>
       <div class="flex">
@@ -148,7 +159,7 @@ const DATA_SOURCE = [
 {"order":"29844392230","amount":1240},{"order":"29787668582","amount":670},{"order":"29779855398","amount":670},{"order":"29758217446","amount":208},{"order":"29758125414","amount":670},{"order":"29754938534","amount":189},{"order":"29754882022","amount":740},{"order":"29723444262","amount":1180},{"order":"29722926822","amount":189},{"order":"29722933926","amount":590},{"order":"29722673446","amount":1770},{"order":"29722664486","amount":189},{"order":"29722661094","amount":490},{"order":"29722722854","amount":590},{"order":"29722357286","amount":490},{"order":"29722422118","amount":490},{"order":"29722343654","amount":490},{"order":"29721815398","amount":590},{"order":"29722199910","amount":1470},{"order":"29722121958","amount":590},{"order":"29722146598","amount":189},{"order":"29722006502","amount":590},{"order":"29722009638","amount":189},{"order":"29664786726","amount":1345},{"order":"29657407974","amount":960},{"order":"29657049766","amount":960},{"order":"29657089702","amount":1000},{"order":"29657268006","amount":1000},{"order":"29613864934","amount":990},{"order":"29613779238","amount":990},{"order":"29613146918","amount":1194},{"order":"29595224358","amount":1020},{"order":"29594630822","amount":1020},{"order":"29594980966","amount":1020},{"order":"29595121894","amount":1020},{"order":"29595097062","amount":1020},{"order":"29595222822","amount":1020},{"order":"29584577446","amount":1020},{"order":"29585686374","amount":1020},{"order":"29579912422","amount":990},{"order":"29613146918","amount":1194},{"order":"29595224358","amount":1020},{"order":"29594630822","amount":1020},{"order":"29594980966","amount":1020},{"order":"29595121894","amount":1020},{"order":"29595097062","amount":1020},{"order":"29595222822","amount":1020},{"order":"29584577446","amount":1020},{"order":"29585686374","amount":1020},{"order":"29579912422","amount":990},{"order":"29579148454","amount":990},{"order":"29578714086","amount":159},{"order":"29578467110","amount":990},{"order":"29578353894","amount":990},{"order":"29578045286","amount":1020},{"order":"29578181862","amount":1020},{"order":"29578056486","amount":2040},{"order":"29577984294","amount":2040},{"order":"29521294630","amount":1050},{"order":"29521271270","amount":1050},{"order":"29511656678","amount":1050},{"order":"29511582438","amount":1050},{"order":"29503897638","amount":1020},{"order":"29503915686","amount":1020},{"order":"29503479526","amount":1050},{"order":"29503480294","amount":1050},{"order":"29499944230","amount":1000},{"order":"29499944294","amount":1000},{"order":"29498897254","amount":1050},{"order":"29498897702","amount":1050},{"order":"29490917478","amount":1050},{"order":"29490868710","amount":1050},{"order":"29488269734","amount":1000},{"order":"29488521894","amount":1000},{"order":"29488129766","amount":1000},{"order":"29488684390","amount":1000},{"order":"29487024294","amount":1050},{"order":"29487043942","amount":1050},{"order":"29487038182","amount":1050},{"order":"29487022822","amount":1050},{"order":"29475651046","amount":1050},{"order":"29475572838","amount":1050},{"order":"29472654886","amount":1050},{"order":"29472546022","amount":1050},{"order":"29376457638","amount":1050},{"order":"29376618790","amount":1050},{"order":"29372705702","amount":1050},{"order":"29372746918","amount":1050},{"order":"29324981734","amount":1050},{"order":"29325052966","amount":1050},{"order":"29324565990","amount":1050},{"order":"29324610982","amount":1050},{"order":"29324176358","amount":1050},{"order":"29324204646","amount":1050},{"order":"29322723302","amount":2100},{"order":"29321161126","amount":2100},{"order":"29321200934","amount":2100},{"order":"29320710246","amount":3150},{"order":"29320689446","amount":5250},{"order":"29320422758","amount":1050},{"order":"29320229798","amount":2100},{"order":"29320212582","amount":2100},{"order":"29320259878","amount":5250},{"order":"29320237030","amount":1050},{"order":"29320311014","amount":5250},{"order":"29313551014","amount":2100},{"order":"29313528934","amount":5250},{"order":"29313330278","amount":5250},{"order":"29309418406","amount":5250},{"order":"29250020006","amount":1050},{"order":"29250000166","amount":4200},{"order":"29250087014","amount":5250},{"order":"29250059750","amount":1050},{"order":"29250018150","amount":3150},{"order":"29249976614","amount":4200},{"order":"29249801830","amount":5250},{"order":"29240651238","amount":5250},{"order":"29203828262","amount":3150},{"order":"29195981798","amount":1050},{"order":"29195932070","amount":1050},{"order":"29195980582","amount":1050},{"order":"29195981286","amount":1050},{"order":"29195705894","amount":2100},{"order":"29195678438","amount":2100},{"order":"29195667686","amount":1050},{"order":"29195761510","amount":1050},{"order":"29195733798","amount":1050},{"order":"29195721766","amount":1050},{"order":"29195728550","amount":1050},{"order":"29195559462","amount":1050},{"order":"29195615078","amount":1050},{"order":"29195500582","amount":1050},{"order":"29192155750","amount":2100},{"order":"29192157670","amount":2100},{"order":"29187893094","amount":1050},{"order":"29187884390","amount":1050},{"order":"29187450918","amount":1050},{"order":"29187453030","amount":1050},{"order":"29187413158","amount":1050},{"order":"29187431462","amount":1050},{"order":"29186986278","amount":1050},{"order":"29186994662","amount":1050},{"order":"29186704166","amount":1050},{"order":"29186524646","amount":5250},{"order":"29186336294","amount":3150},{"order":"29186354726","amount":3150},{"order":"29175575462","amount":1020},{"order":"29175636582","amount":1020},{"order":"29156266534","amount":3060},{"order":"29156274086","amount":3060},{"order":"29156045670","amount":1020},{"order":"29156085414","amount":1020},{"order":"29155498086","amount":2040},{"order":"29155589734","amount":2040},{"order":"29106863398","amount":229},{"order":"29085307238","amount":169},{"order":"29084841830","amount":845},{"order":"29041101926","amount":398},{"order":"29039226086","amount":995},{"order":"29039009830","amount":1393},{"order":"29038401830","amount":796},{"order":"29018396326","amount":796},{"order":"29008596838","amount":199},{"order":"29007762982","amount":5150},{"order":"29003278694","amount":209},{"order":"28964953318","amount":1010},{"order":"28965073958","amount":1010},{"order":"28957860134","amount":1010},{"order":"28957880934","amount":1010},{"order":"28945928166","amount":1010},{"order":"28945876774","amount":1010},{"order":"28941124646","amount":1010},{"order":"28941227494","amount":1010},{"order":"28940363750","amount":1010},{"order":"28940510694","amount":1010},{"order":"28940484134","amount":1010},{"order":"28940484582","amount":1010},{"order":"28940030374","amount":1010},{"order":"28939941734","amount":1010},{"order":"28939594534","amount":1010},{"order":"28939622054","amount":1010},{"order":"28934446950","amount":1010},{"order":"28934754086","amount":980},{"order":"28922217446","amount":1010},{"order":"28917119142","amount":1010},{"order":"28917546406","amount":1010},{"order":"28916902502","amount":980},{"order":"28916850278","amount":980},{"order":"28915493094","amount":1010},{"order":"28915621542","amount":1010},{"order":"28902560550","amount":980},{"order":"28902630502","amount":980},{"order":"28901966694","amount":980},{"order":"28901861734","amount":980},{"order":"28900709542","amount":980},{"order":"28900711270","amount":980},{"order":"28609574630","amount":1030},{"order":"28510891814","amount":450},{"order":"28510953062","amount":360},{"order":"28192753958","amount":970},{"order":"28192706790","amount":970},{"order":"28191451238","amount":1940},{"order":"28185388710","amount":3000},{"order":"28016488742","amount":990},{"order":"27989546470","amount":990},{"order":"27989054310","amount":990},{"order":"27989195302","amount":960},{"order":"27498602150","amount":2970},{"order":"27498949542","amount":2880},{"order":"27499031206","amount":4950},{"order":"27499056870","amount":4800},{"order":"27497737574","amount":4950},{"order":"27494179878","amount":990},{"order":"27493949158","amount":960},{"order":"27494024038","amount":990},{"order":"27493984614","amount":960},{"order":"27494228902","amount":990},{"order":"27494335398","amount":960},{"order":"27494049126","amount":3840},{"order":"27494017958","amount":3840},{"order":"27493623782","amount":960},{"order":"27493594598","amount":960},{"order":"27493467814","amount":960},{"order":"27493556646","amount":960},{"order":"27493456870","amount":1920},{"order":"27492798118","amount":960},{"order":"27493151398","amount":960},{"order":"27492642150","amount":960},{"order":"27473140390","amount":990},{"order":"27472936230","amount":2970},{"order":"27472964774","amount":990},{"order":"27462561958","amount":2970},{"order":"27460235046","amount":990},{"order":"27460354918","amount":960},{"order":"27460337702","amount":2970},{"order":"27309417766","amount":1020},{"order":"27309158246","amount":1020},{"order":"27309054566","amount":1020},{"order":"27307771942","amount":1020},{"order":"27306899942","amount":2040},{"order":"27266581350","amount":3060},{"order":"27249636582","amount":5100},{"order":"27239209510","amount":5150},{"order":"27232240614","amount":2020},{"order":"27231980262","amount":5050},{"order":"27232397414","amount":5050},{"order":"27231626022","amount":4120},{"order":"27224537510","amount":1010},{"order":"27136238886","amount":1050},{"order":"27136276518","amount":1050},{"order":"27134868582","amount":1050},{"order":"27134126886","amount":3150},{"order":"26790683558","amount":1040},{"order":"26693575462","amount":5050},{"order":"26388819174","amount":4160},{"order":"26373999526","amount":5200},{"order":"26211479910","amount":2060},{"order":"29722082086","amount":1770},{"order":"29722808550","amount":810},{"order":"29722753254","amount":567},{"order":"29722016806","amount":189},{"order":"29722015270","amount":490},{"order":"29721364070","amount":1770},{"order":"29721258726","amount":567},{"order":"29046424358","amount":597}
 ];
 
-/* ====== 配置区 V9.3 ====== */
+/* ====== 配置区 V9.4 ====== */
 let inventory=[];
 let deleteRecords=JSON.parse(localStorage.getItem('deleteRecords_V9_2')||'[]');
 const saveDeleteRecords=()=>localStorage.setItem('deleteRecords_V9_2',JSON.stringify(deleteRecords));
@@ -218,7 +229,7 @@ function renderDeleteRecords(){
 }
 function bindAccordion(h,c){ h.addEventListener('click',()=>{ const open=c.style.display==='block'; c.style.display=open?'none':'block'; h.classList.toggle('open',!open); }); }
 
-/* ====== V9.3 新增逻辑：搜索与修正 ====== */
+/* ====== V9.3 搜索与修正 ====== */
 function renderEditSearch(){
   const input = document.getElementById('search-order-input');
   const btn = document.getElementById('btn-search-order');
@@ -229,7 +240,6 @@ function renderEditSearch(){
     if(!val) return alert('请输入订单号');
     area.innerHTML = '';
     
-    // 模糊搜索
     const found = inventory.filter(o => o.order.includes(val));
     if(found.length === 0){
       area.innerHTML = '<div style="color:red;padding:10px 0;">未找到相关订单。</div>';
@@ -251,9 +261,6 @@ function renderEditSearch(){
       saveBtn.onclick = () => {
         const newAmt = Math.round(Number(newValInput.value));
         if(!newAmt || newAmt <= 0) return alert('金额必须大于0');
-        
-        // 更新逻辑：
-        // 1. 在inventory中找到原对象（通过makeKey，因为可能存在order相同amount不同的旧脏数据）
         const oldKey = makeKey(item);
         const idx = inventory.findIndex(x => makeKey(x) === oldKey);
         
@@ -262,32 +269,37 @@ function renderEditSearch(){
           return;
         }
 
-        // 2. 修改
         inventory[idx].amount = newAmt;
-        
-        // 3. 重新normalize去重（防止改完后和现有的重复）并保存
         inventory = normalize(inventory);
         saveInventory();
         
         alert(`订单 ${item.order} 金额已更新为 ${newAmt}`);
         log(`修正数据：订单 ${item.order} 从 ${item.amount} -> ${newAmt}`);
-        
-        // 刷新搜索结果显示
         btn.click(); 
       };
-      
       area.appendChild(div);
     });
   };
 }
 
-/* ====== 核心算法 (保持 V9.2 逻辑) ====== */
-function selectOrdersByDP(target, maxSingle, allowApprox, onlyHigher){
-  const pool = (maxSingle>0)? inventory.filter(o=>o.amount<=maxSingle) : inventory.slice();
-  if(pool.length===0) return null;
+/* ====== 核心算法 (V9.4 增加 filter 参数) ====== */
+function selectOrdersByDP(target, maxSingle, allowApprox, onlyHigher, minOrderStr, maxOrderStr){
+  // 1. 基础池：复制一份库存
+  let pool = inventory.slice();
 
+  // 2. 订单号范围过滤 (V9.4)
+  if(minOrderStr) pool = pool.filter(o => o.order >= minOrderStr);
+  if(maxOrderStr) pool = pool.filter(o => o.order <= maxOrderStr);
+
+  // 3. 金额上限过滤
+  if(maxSingle > 0) pool = pool.filter(o => o.amount <= maxSingle);
+
+  if(pool.length === 0) return null;
+
+  // 4. DP 逻辑
   const hi = allowApprox ? (target+500) : target;
   const dp = Array(hi+1).fill(null); dp[0]={cnt:0,picks:[]};
+  
   for(let i=0;i<pool.length;i++){
     const a=pool[i].amount|0;
     for(let s=hi;s>=a;s--){
@@ -296,8 +308,11 @@ function selectOrdersByDP(target, maxSingle, allowApprox, onlyHigher){
       }
     }
   }
+
+  // 严格匹配
   if(dp[target]) return {sum:target, orders: dp[target].picks.map(i=>pool[i])};
 
+  // 误差匹配
   if(!allowApprox) return null;
   for(let d=1; d<=500; d++){
     const sUp = target + d;
@@ -464,9 +479,12 @@ function splitFixedCount(selectedOrders, minS, maxS, k){
   return dfs(total, k, base);
 }
 
-function computeInvoices(target, minS, maxS, maxSame, invoiceCount, allowApprox, onlyHigher){
-  const pickRes = selectOrdersByDP(target, maxS||0, allowApprox, onlyHigher);
+// 增加 filterOrderMin/Max 参数
+function computeInvoices(target, minS, maxS, maxSame, invoiceCount, allowApprox, onlyHigher, filterMin, filterMax){
+  // 传递 filter 参数给 selectOrdersByDP
+  const pickRes = selectOrdersByDP(target, maxS||0, allowApprox, onlyHigher, filterMin, filterMax);
   if(!pickRes) return null;
+  
   const selected = pickRes.orders;
   const totalSel = pickRes.sum;
 
@@ -490,18 +508,18 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   await loadInventory();
   renderHeaderHistory();
   renderDeleteRecords();
-  renderEditSearch(); // 初始化搜索模块
+  renderEditSearch(); 
 
   const debugH=document.getElementById('debug-acc-header');
   const debugC=document.getElementById('debug-acc-content');
   const delH=document.getElementById('del-acc-header');
   const delC=document.getElementById('record-list');
-  const editH=document.getElementById('edit-acc-header'); // 新增
-  const editC=document.getElementById('edit-acc-content'); // 新增
+  const editH=document.getElementById('edit-acc-header'); 
+  const editC=document.getElementById('edit-acc-content'); 
   
   bindAccordion(debugH,debugC);
   bindAccordion(delH,delC);
-  bindAccordion(editH,editC); // 新增绑定
+  bindAccordion(editH,editC);
 
   document.getElementById('reset-btn').onclick=async()=>{
     if(confirm('确定要重置并恢复初始数据吗？(删除记录将被清空，手动修改也将丢失)')){
@@ -520,6 +538,8 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 
     const tgt=+document.getElementById('target-input').value;
     if(!tgt) return alert('请输入目标金额');
+    
+    // 获取其他输入
     const minS=+document.getElementById('min-single').value||0;
     const maxS=+document.getElementById('max-single').value||0;
     if(minS && maxS && minS>maxS) return alert('下限不可大于上限');
@@ -528,14 +548,28 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     const allowApprox=document.getElementById('allow-approx').checked;
     const onlyHigher=document.getElementById('only-higher').checked;
     const header=document.getElementById('company-header').value.trim();
+    
+    // 获取订单过滤输入 (V9.4)
+    const filterOrderMin = document.getElementById('filter-order-min').value.trim();
+    const filterOrderMax = document.getElementById('filter-order-max').value.trim();
+
     saveHeaderHistory(header); renderHeaderHistory();
 
     const baseTotal=inventory.reduce((a,o)=>a+o.amount,0);
-    const poolTotal=(maxS>0)?inventory.filter(o=>o.amount<=maxS).reduce((a,o)=>a+o.amount,0):baseTotal;
-    log(`开始：target=${tgt}, 范围=[${minS||'-'},${maxS||'-'}], sameCap=${isFinite(msc)?msc:'不限'}, 张数=${ic||'不限'}, 近似=${allowApprox}, 不小于=${onlyHigher}`);
-    log(`库存总额=${baseTotal}；可用池总额（<=maxSingle）=${poolTotal}；订单数=${inventory.length}`);
+    
+    // 计算过滤后的池子大小，仅用于日志显示
+    let debugPool = inventory.slice();
+    if(filterOrderMin) debugPool = debugPool.filter(o => o.order >= filterOrderMin);
+    if(filterOrderMax) debugPool = debugPool.filter(o => o.order <= filterOrderMax);
+    if(maxS>0) debugPool = debugPool.filter(o => o.amount <= maxS);
+    const poolTotal = debugPool.reduce((a,o)=>a+o.amount,0);
 
-    const invs = computeInvoices(tgt,minS,maxS,msc,ic,allowApprox,onlyHigher);
+    log(`开始：target=${tgt}, 范围=[${minS||'-'},${maxS||'-'}], 订单过滤=[${filterOrderMin||'无'} ~ ${filterOrderMax||'无'}]`);
+    log(`原始库存=${inventory.length}条; 过滤后可用=${debugPool.length}条, 总额=${poolTotal}`);
+
+    // 传入 filter 参数
+    const invs = computeInvoices(tgt,minS,maxS,msc,ic,allowApprox,onlyHigher, filterOrderMin, filterOrderMax);
+    
     if(!invs || !invs.length){
       outEl.textContent='无法组合出满足条件的金额';
       debugC.style.display='block'; debugH.classList.add('open');
