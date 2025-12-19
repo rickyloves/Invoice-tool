@@ -2,161 +2,331 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票组合计算器 (V9.9 库存统计版)</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>发票组合计算器 (V10.0 UI焕新版)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
   <script>
     window.onerror = function(msg, url, line) {
-      alert('【程序报错】\n' + msg + '\n行号：' + line + '\n请截图反馈或检查代码复制是否完整。');
+      alert('【程序报错】\n' + msg + '\n行号：' + line + '\n请截图反馈。');
     };
   </script>
   <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    /* 底部留白 */
-    body{background:#eef7f2;font-family:Arial,Helvetica,sans-serif;color:#333;padding-bottom:260px}
-    .container{max-width:480px;margin:18px auto;padding:0 10px}
-    h2{text-align:center;margin-bottom:12px;font-size:1.6rem}
-    .card{background:#fff;border-radius:6px;padding:16px;margin-bottom:12px;box-shadow:0 2px 5px rgba(0,0,0,.05)}
-    label{display:block;margin-top:12px;font-weight:bold}
-    input,textarea{width:100%;padding:8px;margin-top:6px;border:1px solid #ccc;border-radius:4px}
-    textarea{resize:vertical}
-    .flex{display:flex;gap:8px;margin-top:6px}
-    .flex input{flex:1}
-    .flex span{line-height:32px}
-    .two-cols{display:flex;gap:8px;margin-top:6px}
-    .two-cols>div{flex:1}
-    #header-history{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
-    .hdr-item{background:#ececec;color:#555;border-radius:4px;display:flex;align-items:center;overflow:hidden}
-    .hdr-item button.txt{background:transparent;border:none;padding:6px 10px;font-size:.9rem;color:#333;cursor:pointer}
-    .hdr-item button.del{background:transparent;border:none;padding:6px;font-size:1rem;color:#999;cursor:pointer;transition:color .2s}
-    .hdr-item button.del:hover{color:#666}
-    #result-output,#debug-log{white-space:pre-wrap;max-height:240px;overflow:auto;font-family:monospace;font-size:.9rem}
-    .accordion{border-radius:6px;overflow:hidden;margin-top:12px}
-    .accordion-header{background:#fff;padding:12px 16px;cursor:pointer;font-weight:bold;box-shadow:0 2px 5px rgba(0,0,0,.05);display:flex;justify-content:space-between;align-items:center}
-    .accordion-header .arrow{width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:7px solid #666;transition:transform .28s ease}
-    .accordion-header.open .arrow{transform:rotate(180deg)}
-    .accordion-content{display:none;background:#fff;padding:12px 16px;box-shadow:0 2px 5px rgba(0,0,0,.05)}
-    
-    .record-item{border-top:1px solid #eee;padding:10px 0}
-    .record-item:first-child{border-top:none}
-    .record-title{font-weight:bold;font-size:0.95rem;margin-bottom:6px;color:#444;}
-    .single-order-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px dashed #f5f5f5;font-size:0.9rem;}
-    .single-order-row:last-child{border-bottom:none;}
-    .btn-recover-one{font-size:0.8rem;padding:2px 8px;background:#17a2b8;color:white;border:none;border-radius:3px;cursor:pointer;}
-    .btn-recover-batch{display:block;margin:10px auto 0;padding:6px 12px;background:#6c757d;color:#fff;border:none;border-radius:4px;font-size:.9rem;cursor:pointer}
-    
-    .edit-row{display:flex;gap:6px;align-items:center;margin-top:8px;padding-bottom:8px;border-bottom:1px dashed #eee}
-    .edit-row span{font-size:0.85rem;color:#666;flex:1}
-    .edit-row input{width:80px;margin-top:0;text-align:center}
-    .edit-row button{padding:6px 10px;border:none;border-radius:4px;cursor:pointer;font-size:0.85rem}
-    .btn-update{background:#28a745;color:#fff}
-    .search-box{display:flex;gap:8px}
-    .search-box button{width:80px;background:#17a2b8;color:white;border:none;border-radius:4px;cursor:pointer}
-
-    .footer{position:fixed;left:0;right:0;bottom:0;background:#fff;box-shadow:0 -2px 10px rgba(0,0,0,.1);padding:10px;display:flex;gap:8px;flex-wrap:wrap;z-index: 100;}
-    .footer .btn-full { flex: 1 1 100%; font-weight: bold; padding: 14px 0; font-size: 1.1rem; }
-    .footer .btn-half { flex: 1 1 calc(50% - 4px); padding: 10px 0; font-size: 0.9rem; }
-    
-    .footer button{border:none;border-radius:4px;cursor:pointer}
-    .primary{background:#007bff;color:#fff}.secondary{background:#6c757d;color:#fff}.danger{background:#dc3545;color:#fff}
-    .hidden{display:none}
-    .tip{font-size:.9rem;color:#666;margin-top:6px}
-    .highlight-label { color: #d63384; }
-    
-    #loading-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(255,255,255,0.9);z-index:999;display:none;flex-direction:column;align-items:center;justify-content:center;}
-    .spinner{width:40px;height:40px;border:4px solid #f3f3f3;border-top:4px solid #007bff;border-radius:50%;animation:spin 1s linear infinite;margin-bottom:10px}
-    @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
-
-    #backup-area { display: none; margin-top: 10px; }
-    #backup-text { width: 100%; height: 100px; font-size: 0.8rem; color: #555; }
-    
-    /* V9.9 新增：库存统计样式 */
-    .inventory-stats-box {
-        background: #e7f1ff;
-        color: #0056b3;
-        padding: 12px;
-        border-radius: 6px;
-        margin-top: 16px;
-        font-size: 0.95rem;
-        line-height: 1.6;
-        border: 1px solid #b8daff;
+    :root {
+      --primary: #007aff; /* iOS Blue */
+      --primary-hover: #0062cc;
+      --bg-color: #f2f2f7; /* iOS System Gray 6 */
+      --card-bg: #ffffff;
+      --text-main: #1c1c1e;
+      --text-sub: #8e8e93;
+      --border-radius: 12px;
+      --btn-radius: 10px;
+      --shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+      --danger: #ff3b30;
+      --success: #34c759;
+      --warning: #ffcc00;
     }
-    .inventory-stats-box strong { font-weight: bold; color: #004085; }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; outline: none; -webkit-tap-highlight-color: transparent; }
+    
+    body {
+      background: var(--bg-color);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: var(--text-main);
+      padding-bottom: 280px; /* 留出底部操作区 */
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 20px 16px;
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--text-main);
+      letter-spacing: -0.5px;
+    }
+
+    /* 卡片通用样式 */
+    .card {
+      background: var(--card-bg);
+      border-radius: var(--border-radius);
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(0,0,0,0.02);
+    }
+
+    label {
+      display: block;
+      margin-top: 16px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #3a3a3c;
+      margin-bottom: 6px;
+    }
+    label:first-child { margin-top: 0; }
+    .highlight-label { color: var(--primary); }
+
+    /* 输入框优化 */
+    input, textarea {
+      width: 100%;
+      padding: 12px;
+      font-size: 1rem;
+      border: 1px solid #d1d1d6;
+      border-radius: 8px;
+      background: #fcfcfc;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+    input:focus, textarea:focus {
+      border-color: var(--primary);
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+    }
+    textarea { resize: vertical; min-height: 80px; }
+
+    .flex { display: flex; gap: 10px; align-items: center; }
+    .flex input { flex: 1; text-align: center; }
+    .flex span { color: var(--text-sub); font-weight: bold; }
+
+    .two-cols { display: flex; gap: 12px; margin-top: 10px; }
+    .two-cols > div { flex: 1; }
+
+    /* Checkbox 优化 */
+    .checkbox-group {
+      display: flex;
+      gap: 15px;
+      margin-top: 16px;
+      background: #f9f9f9;
+      padding: 12px;
+      border-radius: 8px;
+    }
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      font-size: 0.9rem;
+      color: #555;
+      cursor: pointer;
+    }
+    .checkbox-item input { width: auto; margin-right: 6px; transform: scale(1.2); }
+
+    /* 抬头历史 */
+    #header-history { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .hdr-item {
+      background: #f2f2f7;
+      color: var(--primary);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      font-size: 0.85rem;
+      border: 1px solid rgba(0,0,0,0.05);
+    }
+    .hdr-item button.txt { background: transparent; border: none; padding: 6px 10px; color: inherit; font-weight: 500; }
+    .hdr-item button.del { background: rgba(0,0,0,0.05); border: none; padding: 6px 8px; color: #999; }
+    
+    /* V10.0 库存仪表盘 */
+    .inventory-stats-box {
+      background: linear-gradient(135deg, #e3f2fd 0%, #f0f7ff 100%);
+      color: #004085;
+      padding: 15px;
+      border-radius: var(--border-radius);
+      margin-top: 20px;
+      border: 1px solid #b8daff;
+      position: relative;
+      overflow: hidden;
+    }
+    .inventory-stats-box::before {
+      content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--primary);
+    }
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 5px; }
+    .stat-item { background: rgba(255,255,255,0.6); padding: 8px; border-radius: 6px; text-align: center; }
+    .stat-val { font-size: 1.1rem; font-weight: 800; color: var(--primary); display: block; }
+    .stat-label { font-size: 0.75rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-range { grid-column: 1 / -1; text-align: center; font-size: 0.85rem; color: #555; margin-top: 4px; background: rgba(255,255,255,0.4); padding: 4px; border-radius: 4px;}
+
+    /* 折叠面板 */
+    .accordion { border-radius: var(--border-radius); overflow: hidden; margin-top: 12px; box-shadow: var(--shadow); background: #fff; }
+    .accordion-header {
+      padding: 14px 20px;
+      cursor: pointer;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #fff;
+      border-bottom: 1px solid #f0f0f0;
+      transition: background 0.2s;
+    }
+    .accordion-header:active { background: #f9f9f9; }
+    .accordion-header .arrow {
+      width: 8px; height: 8px;
+      border-right: 2px solid #ccc; border-bottom: 2px solid #ccc;
+      transform: rotate(45deg); transition: transform 0.3s;
+    }
+    .accordion-header.open .arrow { transform: rotate(-135deg); border-color: var(--primary); }
+    .accordion-content { display: none; padding: 16px 20px; background: #fafafa; }
+    
+    /* 结果区域 */
+    #result-output {
+      font-family: "SF Mono", "Menlo", "Monaco", "Courier New", monospace;
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+      color: #333;
+      background: #f8f9fa;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #eee;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    /* 底部固定操作栏 */
+    .footer {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+      padding: 12px 16px 30px 16px; /* 适配 iPhone X 底部 */
+      display: flex; gap: 10px; flex-wrap: wrap; z-index: 100;
+      border-top: 1px solid rgba(0,0,0,0.05);
+    }
+    .footer button {
+      border: none;
+      border-radius: var(--btn-radius);
+      cursor: pointer;
+      font-weight: 600;
+      transition: transform 0.1s, opacity 0.2s;
+    }
+    .footer button:active { transform: scale(0.98); opacity: 0.9; }
+    
+    .btn-full { flex: 1 1 100%; padding: 14px 0; font-size: 1.1rem; }
+    .btn-half { flex: 1 1 calc(50% - 5px); padding: 12px 0; font-size: 0.95rem; }
+
+    .primary { background: var(--primary); color: #fff; box-shadow: 0 4px 10px rgba(0, 122, 255, 0.3); }
+    .secondary { background: #e5e5ea; color: #333; }
+    .danger { background: var(--danger); color: #fff; }
+    .success { background: var(--success); color: #fff; }
+    .warning { background: var(--warning); color: #000; }
+
+    .hidden { display: none !important; }
+    .tip { font-size: 0.85rem; color: var(--text-sub); line-height: 1.4; }
+
+    /* Loading */
+    #loading-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(4px);
+      z-index: 999;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .spinner {
+      width: 44px; height: 44px;
+      border: 4px solid #e5e5e5;
+      border-top: 4px solid var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 15px;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg) } 100% { transform: rotate(360deg) } }
+
+    /* 备份文本框 */
+    #backup-area { display: none; margin-top: 10px; }
+    #backup-text { font-size: 0.75rem; color: #555; background: #fff; }
+    
+    /* 修正删除/修正列表 */
+    .record-item { border-top: 1px dashed #eee; padding: 12px 0; }
+    .record-item:first-child { border-top: none; }
+    .record-title { font-weight: 700; color: #333; margin-bottom: 8px; font-size: 0.95rem; }
+    .single-order-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.9rem; color: #555; }
+    .btn-recover-one { font-size: 0.75rem; padding: 4px 10px; background: #e3f2fd; color: var(--primary); border-radius: 12px; border:none; }
+    .btn-recover-batch { width: 100%; margin-top: 10px; padding: 8px; background: #f0f0f5; color: #555; border-radius: 8px; border:none; font-weight: 500;}
+    
+    .edit-row { display: flex; gap: 8px; align-items: center; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+    .edit-row input { width: 80px; padding: 6px; }
+    .btn-update { padding: 6px 12px; background: var(--success); color: white; border: none; border-radius: 6px; font-size: 0.85rem;}
   </style>
 </head>
 <body>
+
   <div id="loading-overlay">
     <div class="spinner"></div>
-    <div id="loading-text" style="font-weight:bold;color:#333">正在计算...</div>
-    <div id="retry-count" style="color:#666;margin-top:5px">0 / 2000</div>
+    <div id="loading-text" style="font-weight:600; color:#333; font-size:1.1rem;">正在智能组合...</div>
+    <div id="retry-count" style="color:#888; margin-top:8px; font-size:0.9rem; font-variant-numeric: tabular-nums;">0 / 2000</div>
   </div>
 
   <div class="container">
-    <h2>发票组合计算器 (V9.9)</h2>
+    <h2>🧾 发票组合计算器</h2>
 
     <div class="card">
-      <label>目标开票金额</label>
-      <input id="target-input" type="number" placeholder="如 20000">
+      <label class="highlight-label">🎯 目标开票金额</label>
+      <input id="target-input" type="number" placeholder="请输入总金额，如 20000" style="font-size:1.2rem; font-weight:bold; color:var(--primary);">
 
-      <label class="highlight-label">订单号范围筛选</label>
+      <label>🔍 订单号范围筛选</label>
       <div class="flex">
-        <input id="filter-order-min" type="text" placeholder="起始号 (如 290)">
+        <input id="filter-order-min" type="text" placeholder="起始号">
         <span>—</span>
-        <input id="filter-order-max" type="text" placeholder="结束号 (不填则不限)">
+        <input id="filter-order-max" type="text" placeholder="结束号">
       </div>
 
-      <label>单张发票金额范围</label>
+      <label>💰 单张发票金额限制</label>
       <div class="flex">
-        <input id="min-single" type="number" placeholder="下限">
+        <input id="min-single" type="number" placeholder="最小金额">
         <span>—</span>
-        <input id="max-single" type="number" placeholder="上限">
+        <input id="max-single" type="number" placeholder="最大金额">
       </div>
 
       <div class="two-cols">
         <div>
-          <label>相同金额发票张数上限</label>
-          <input id="max-same-count" type="number" placeholder="留空表示不限">
+          <label>🔢 同额张数上限</label>
+          <input id="max-same-count" type="number" placeholder="默认不限">
         </div>
         <div>
-          <label>发票张数</label>
-          <input id="invoice-count" type="number" placeholder="留空表示不限">
+          <label>📄 固定张数</label>
+          <input id="invoice-count" type="number" placeholder="默认不限">
         </div>
       </div>
 
-      <div class="two-cols" style="margin-top:6px">
-        <div>
-          <input type="checkbox" id="allow-approx">
-          <label for="allow-approx">允许误差最小匹配</label>
-        </div>
-        <div>
-          <input type="checkbox" id="only-higher">
-          <label for="only-higher">匹配金额不得小于目标</label>
-        </div>
+      <div class="checkbox-group">
+        <label class="checkbox-item">
+          <input type="checkbox" id="allow-approx"> 允许误差最小匹配
+        </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="only-higher"> 不得小于目标
+        </label>
       </div>
 
-      <label>公司抬头</label>
-      <textarea id="company-header" rows="2" placeholder="行1：公司名称
-行2：统一社会信用代码"></textarea>
+      <label>🏢 公司抬头</label>
+      <textarea id="company-header" rows="2" placeholder="行1：公司名称&#10;行2：税号"></textarea>
       <div id="header-history"></div>
 
       <div id="inventory-stats" class="inventory-stats-box">
-          正在计算库存信息...
+          <div style="text-align:center; color:#999;">正在加载库存数据...</div>
       </div>
     </div>
 
     <div class="accordion">
-        <div class="accordion-header" id="backup-acc-header" style="background:#fff3cd;color:#856404;">
-          <span>📦 数据备份与恢复 (点此展开)</span>
+        <div class="accordion-header" id="backup-acc-header" style="color:#b58900;">
+          <span>📦 数据迁移 (备份/恢复)</span>
           <div class="arrow"></div>
         </div>
         <div class="accordion-content" id="backup-acc-content">
-          <div class="tip">1. <b>备份(导出)</b>：点击下方“备份数据”，若未下载文件，请手动全选复制文本框内容发给新设备。<br>2. <b>恢复(导入)</b>：点击“恢复数据”，选择之前备份的 json 文件。</div>
-          <div class="two-cols" style="margin-top:10px;">
-              <button id="backup-btn" style="background:#28a745;color:#fff;padding:10px;border:none;border-radius:4px;">备份数据 (iPad导出)</button>
-              <button id="restore-btn" style="background:#ffc107;color:#000;padding:10px;border:none;border-radius:4px;">恢复数据 (Mac导入)</button>
+          <div class="tip">在旧设备点“备份”复制乱码，在新设备点“恢复”粘贴或导入文件。</div>
+          <div class="two-cols" style="margin-top:12px;">
+              <button id="backup-btn" class="success" style="padding:10px; border-radius:8px; border:none; width:100%;">📤 备份数据</button>
+              <button id="restore-btn" class="warning" style="padding:10px; border-radius:8px; border:none; width:100%;">📥 恢复数据</button>
           </div>
           <div id="backup-area">
-              <label>备份内容（如果下载失败请复制这里）：</label>
-              <textarea id="backup-text" readonly></textarea>
+              <label>备份码（复制/粘贴此处）：</label>
+              <textarea id="backup-text" readonly onclick="this.select()"></textarea>
           </div>
           <input type="file" id="restore-input" style="display:none" accept=".json">
         </div>
@@ -164,34 +334,34 @@
 
     <div class="accordion">
       <div class="accordion-header" id="edit-acc-header">
-        <span>库存修正 / 查询</span>
+        <span>🛠 库存修正 / 查询</span>
         <div class="arrow"></div>
       </div>
       <div class="accordion-content" id="edit-acc-content">
-        <div class="search-box">
-            <input id="search-order-input" type="text" placeholder="输入完整或部分订单号">
-            <button id="btn-search-order">查询</button>
+        <div class="search-box flex">
+            <input id="search-order-input" type="text" placeholder="输入订单号查询">
+            <button id="btn-search-order" class="primary" style="width:80px; padding:0; border-radius:8px;">查询</button>
         </div>
         <div id="edit-result-area" style="margin-top:10px"></div>
       </div>
     </div>
 
     <div class="card">
-      <h3>导出结果</h3>
-      <div id="result-output"></div>
+      <h3 style="font-size:1rem; margin-bottom:10px;">📤 组合结果</h3>
+      <div id="result-output" placeholder="点击“一键组合”后在此显示结果"></div>
     </div>
 
     <div class="accordion">
       <div class="accordion-header" id="del-acc-header">
-        <span>删除记录（最近20条）</span>
+        <span>🗑 删除/恢复记录</span>
         <div class="arrow"></div>
       </div>
       <div class="accordion-content" id="record-list" style="display:none;"></div>
     </div>
 
-    <div class="accordion">
+    <div class="accordion" style="margin-bottom: 20px;">
       <div class="accordion-header" id="debug-acc-header">
-        <span>调试日志</span>
+        <span>🐞 调试日志</span>
         <div class="arrow"></div>
       </div>
       <div class="accordion-content" id="debug-acc-content" style="display:none;">
@@ -201,12 +371,10 @@
   </div>
 
   <div class="footer">
-    <button id="combine-btn" class="primary btn-full">一键组合</button>
-    
-    <button id="copy-btn" class="secondary btn-half">复制结果</button>
-    <button id="reset-btn" class="secondary btn-half">重置库存</button>
-    
-    <button id="confirm-delete-btn" class="danger btn-full hidden">确认删除</button>
+    <button id="combine-btn" class="primary btn-full">✨ 一键智能组合</button>
+    <button id="copy-btn" class="secondary btn-half">📋 复制结果</button>
+    <button id="reset-btn" class="secondary btn-half">🔄 重置库存</button>
+    <button id="confirm-delete-btn" class="danger btn-full hidden">🗑 确认删除库存</button>
   </div>
 
 <script>
@@ -216,20 +384,19 @@ const DATA_SOURCE = [
 ];
 
 let inventory=[];
-let deleteRecords=JSON.parse(localStorage.getItem('deleteRecords_V9_2')||'[]');
+let deleteRecords=JSON.parse(localStorage.getItem('deleteRecords_V10_0')||'[]');
 
-// --- V9.9 修改：每次保存库存时更新 UI 统计 ---
-const saveDeleteRecords=()=>localStorage.setItem('deleteRecords_V9_2',JSON.stringify(deleteRecords));
+const saveDeleteRecords=()=>localStorage.setItem('deleteRecords_V10_0',JSON.stringify(deleteRecords));
 const saveInventory = () => {
-    localStorage.setItem('invoiceInventory_V9_2',JSON.stringify(inventory));
-    renderStats(); // 实时更新统计
+    localStorage.setItem('invoiceInventory_V10_0',JSON.stringify(inventory));
+    renderStats();
 };
 
-const loadHeaderHistory=()=>JSON.parse(localStorage.getItem('headerHistory_V9_2')||'[]');
+const loadHeaderHistory=()=>JSON.parse(localStorage.getItem('headerHistory_V10_0')||'[]');
 const saveHeaderHistory=h=>{
   if(!h) return; const arr=loadHeaderHistory().filter(x=>x!==h);
   arr.unshift(h); if(arr.length>10) arr.pop();
-  localStorage.setItem('headerHistory_V9_2',JSON.stringify(arr));
+  localStorage.setItem('headerHistory_V10_0',JSON.stringify(arr));
 };
 function log(msg){ const el=document.getElementById('debug-log'); const t=new Date().toLocaleTimeString(); if(el) el.textContent+=`[${t}] ${msg}\n`; }
 
@@ -244,48 +411,56 @@ function normalize(raw){
 }
 const makeKey=o=>o.order+'|'+o.amount;
 
-// --- V9.9 新增：库存统计渲染函数 ---
+// 仪表盘统计渲染
 function renderStats() {
     const el = document.getElementById('inventory-stats');
     if (!el) return;
     
     if (!inventory || inventory.length === 0) {
-        el.innerHTML = '<strong>📊 库存概览：</strong><br>当前库存为空 (0 条记录)。';
+        el.innerHTML = '<div style="text-align:center; padding:10px; color:#888;">📦 库存空空如也</div>';
         return;
     }
     
     const count = inventory.length;
-    // 计算总金额
     const total = inventory.reduce((a, b) => a + b.amount, 0);
-    // 计算最小和最大金额 (处理空数组情况)
     let min = 0, max = 0;
     if (count > 0) {
-        // 使用 reduce 避免 spread operator 栈溢出风险
         min = inventory.reduce((m, p) => (p.amount < m ? p.amount : m), inventory[0].amount);
         max = inventory.reduce((m, p) => (p.amount > m ? p.amount : m), inventory[0].amount);
     }
-    
-    // 格式化数字
     const fmt = (n) => n.toLocaleString();
     
-    el.innerHTML = `<strong>📊 库存概览：</strong><br>` +
-                   `数量：${fmt(count)} 张 &nbsp;|&nbsp; 总额：${fmt(total)} 元<br>` +
-                   `范围：${fmt(min)} — ${fmt(max)} 元`;
+    el.innerHTML = `
+      <div style="font-weight:600; margin-bottom:10px; opacity:0.8;">📊 实时库存监控</div>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <span class="stat-val">${fmt(total)}</span>
+          <span class="stat-label">总金额 (元)</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-val">${fmt(count)}</span>
+          <span class="stat-label">订单数 (张)</span>
+        </div>
+        <div class="stat-range">
+          单笔范围：<b>${fmt(min)}</b> ~ <b>${fmt(max)}</b> 元
+        </div>
+      </div>
+    `;
 }
 
 async function loadInventory(forceReset=false){
   if(!forceReset){
-    const local=JSON.parse(localStorage.getItem('invoiceInventory_V9_2')||'null');
+    const local=JSON.parse(localStorage.getItem('invoiceInventory_V10_0')||'null');
     if(local){ 
         inventory=normalize(local); 
         log(`从缓存读取：${inventory.length} 条`); 
-        renderStats(); // 读取缓存后更新统计
+        renderStats();
         return; 
     }
   }
   log(`读取内置源数据：共 ${DATA_SOURCE.length} 条记录...`);
   inventory=normalize(DATA_SOURCE); 
-  saveInventory(); // 保存并更新统计
+  saveInventory();
   if(forceReset){ 
     deleteRecords=[]; saveDeleteRecords(); 
     log(`已重置。去重后有效库存：${inventory.length} 条`); 
@@ -299,7 +474,7 @@ function renderHeaderHistory(){
     const txt=document.createElement('button'); txt.className='txt'; txt.textContent=h;
     txt.onclick=()=>document.getElementById('company-header').value=h;
     const del=document.createElement('button'); del.className='del'; del.textContent='✕';
-    del.onclick=()=>{ const a=loadHeaderHistory(); a.splice(i,1); localStorage.setItem('headerHistory_V9_2',JSON.stringify(a)); renderHeaderHistory(); };
+    del.onclick=()=>{ const a=loadHeaderHistory(); a.splice(i,1); localStorage.setItem('headerHistory_V10_0',JSON.stringify(a)); renderHeaderHistory(); };
     wrap.appendChild(txt); wrap.appendChild(del); div.appendChild(wrap);
   });
 }
@@ -313,20 +488,20 @@ function renderDeleteRecords(){
   deleteRecords.slice(0,20).forEach((batch, batchIdx)=>{
     const total=batch.reduce((s,inv)=>s+inv.sum,0);
     const item=document.createElement('div'); item.className='record-item';
-    let html = `<div class="record-title">批次 ${batchIdx+1}：共 ${batch.length} 张发票，合计 ${total} 元</div>`;
+    let html = `<div class="record-title">📄 批次 ${batchIdx+1}：${batch.length}张 / 合计 ${total}元</div>`;
     html += `<div class="orders">`;
     batch.forEach((inv, invIdx) => {
         inv.orders.forEach((o, orderIdx) => {
            html += `
              <div class="single-order-row">
-               <span>订单：${o.order}，金额：${o.amount}元</span>
+               <span>${o.order} <span style="color:#999">|</span> <b>${o.amount}</b>元</span>
                <button class="btn-recover-one" onclick="recoverSingleOrder(${batchIdx}, ${invIdx}, ${orderIdx})">恢复</button>
              </div>
            `;
         });
     });
     html += `</div>`;
-    html += `<button class="btn-recover-batch" onclick="recoverBatch(${batchIdx})">恢复整批数据</button>`;
+    html += `<button class="btn-recover-batch" onclick="recoverBatch(${batchIdx})">↺ 恢复整批数据</button>`;
     item.innerHTML=html;
     list.appendChild(item);
   });
@@ -358,7 +533,7 @@ function renderEditSearch(){
         if(idx === -1) { alert('数据已过期或不存在，请重新搜索'); return; }
         inventory[idx].amount = newAmt;
         inventory = normalize(inventory);
-        saveInventory(); // 自动更新 UI
+        saveInventory();
         alert(`订单 ${item.order} 金额已更新为 ${newAmt}`);
         log(`修正数据：订单 ${item.order} 从 ${item.amount} -> ${newAmt}`);
         btn.click(); 
@@ -379,9 +554,7 @@ window.recoverSingleOrder = function(batchIdx, invIdx, orderIdx) {
     inv.sum = inv.orders.reduce((a, b) => a + b.amount, 0);
     if(inv.orders.length === 0) { batch.splice(invIdx, 1); }
     if(batch.length === 0) { deleteRecords.splice(batchIdx, 1); }
-    saveDeleteRecords(); 
-    saveInventory(); // 自动更新 UI
-    renderDeleteRecords();
+    saveDeleteRecords(); saveInventory(); renderDeleteRecords();
     log(`已单独恢复订单：${order.order}`);
 };
 
@@ -392,9 +565,7 @@ window.recoverBatch = function(batchIdx) {
             if(!inventory.find(x => makeKey(x) === makeKey(o))) inventory.push(o);
         }));
         inventory = normalize(inventory);
-        saveDeleteRecords(); 
-        saveInventory(); // 自动更新 UI
-        renderDeleteRecords();
+        saveDeleteRecords(); saveInventory(); renderDeleteRecords();
         log(`已恢复整批数据 (批次 ${batchIdx+1})`);
     }
 };
@@ -670,7 +841,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     const removeSet=new Set(lastInv.flatMap(inv=>inv.orders.map(makeKey)));
     inventory=inventory.filter(o=>!removeSet.has(makeKey(o)));
     saveDeleteRecords(); 
-    saveInventory(); // 更新统计
+    saveInventory(); 
     renderDeleteRecords();
     document.getElementById('record-list').style.display='block';
     document.getElementById('confirm-delete-btn').classList.add('hidden');
@@ -683,9 +854,9 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   /* 备份逻辑 */
   document.getElementById('backup-btn').onclick = () => {
     const data = {
-      inventory: localStorage.getItem('invoiceInventory_V9_2'),
-      deleteRecords: localStorage.getItem('deleteRecords_V9_2'),
-      headerHistory: localStorage.getItem('headerHistory_V9_2')
+      inventory: localStorage.getItem('invoiceInventory_V10_0'),
+      deleteRecords: localStorage.getItem('deleteRecords_V10_0'),
+      headerHistory: localStorage.getItem('headerHistory_V10_0')
     };
     const jsonStr = JSON.stringify(data);
     
@@ -720,9 +891,9 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     reader.onload = (ev) => {
       try {
         const data = JSON.parse(ev.target.result);
-        if (data.inventory) localStorage.setItem('invoiceInventory_V9_2', data.inventory);
-        if (data.deleteRecords) localStorage.setItem('deleteRecords_V9_2', data.deleteRecords);
-        if (data.headerHistory) localStorage.setItem('headerHistory_V9_2', data.headerHistory);
+        if (data.inventory) localStorage.setItem('invoiceInventory_V10_0', data.inventory);
+        if (data.deleteRecords) localStorage.setItem('deleteRecords_V10_0', data.deleteRecords);
+        if (data.headerHistory) localStorage.setItem('headerHistory_V10_0', data.headerHistory);
         alert('数据恢复成功！页面将立即刷新...');
         location.reload();
       } catch (err) {
