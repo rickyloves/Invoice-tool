@@ -2,12 +2,17 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票组合计算器 (V9.6 单单恢复+备份版)</title>
+  <title>发票组合计算器 (V9.9 库存统计版)</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <script>
+    window.onerror = function(msg, url, line) {
+      alert('【程序报错】\n' + msg + '\n行号：' + line + '\n请截图反馈或检查代码复制是否完整。');
+    };
+  </script>
   <style>
-    /* 样式 V9.6 */
     *{box-sizing:border-box;margin:0;padding:0}
-    body{background:#eef7f2;font-family:Arial,Helvetica,sans-serif;color:#333;padding-bottom:108px}
+    /* 底部留白 */
+    body{background:#eef7f2;font-family:Arial,Helvetica,sans-serif;color:#333;padding-bottom:260px}
     .container{max-width:480px;margin:18px auto;padding:0 10px}
     h2{text-align:center;margin-bottom:12px;font-size:1.6rem}
     .card{background:#fff;border-radius:6px;padding:16px;margin-bottom:12px;box-shadow:0 2px 5px rgba(0,0,0,.05)}
@@ -31,17 +36,14 @@
     .accordion-header.open .arrow{transform:rotate(180deg)}
     .accordion-content{display:none;background:#fff;padding:12px 16px;box-shadow:0 2px 5px rgba(0,0,0,.05)}
     
-    /* V9.6 优化删除记录样式 */
     .record-item{border-top:1px solid #eee;padding:10px 0}
     .record-item:first-child{border-top:none}
     .record-title{font-weight:bold;font-size:0.95rem;margin-bottom:6px;color:#444;}
     .single-order-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px dashed #f5f5f5;font-size:0.9rem;}
     .single-order-row:last-child{border-bottom:none;}
     .btn-recover-one{font-size:0.8rem;padding:2px 8px;background:#17a2b8;color:white;border:none;border-radius:3px;cursor:pointer;}
-    .btn-recover-one:hover{background:#138496;}
     .btn-recover-batch{display:block;margin:10px auto 0;padding:6px 12px;background:#6c757d;color:#fff;border:none;border-radius:4px;font-size:.9rem;cursor:pointer}
     
-    /* V9.3/V9.4 搜索修正区 */
     .edit-row{display:flex;gap:6px;align-items:center;margin-top:8px;padding-bottom:8px;border-bottom:1px dashed #eee}
     .edit-row span{font-size:0.85rem;color:#666;flex:1}
     .edit-row input{width:80px;margin-top:0;text-align:center}
@@ -50,28 +52,46 @@
     .search-box{display:flex;gap:8px}
     .search-box button{width:80px;background:#17a2b8;color:white;border:none;border-radius:4px;cursor:pointer}
 
-    .footer{position:fixed;left:0;right:0;bottom:0;background:#fff;box-shadow:0 -2px 5px rgba(0,0,0,.05);padding:8px;display:flex;gap:8px;flex-wrap:wrap}
-    .footer button{flex:1 1 calc(50% - 4px);padding:12px 0;font-size:1rem;border:none;border-radius:4px;cursor:pointer}
+    .footer{position:fixed;left:0;right:0;bottom:0;background:#fff;box-shadow:0 -2px 10px rgba(0,0,0,.1);padding:10px;display:flex;gap:8px;flex-wrap:wrap;z-index: 100;}
+    .footer .btn-full { flex: 1 1 100%; font-weight: bold; padding: 14px 0; font-size: 1.1rem; }
+    .footer .btn-half { flex: 1 1 calc(50% - 4px); padding: 10px 0; font-size: 0.9rem; }
+    
+    .footer button{border:none;border-radius:4px;cursor:pointer}
     .primary{background:#007bff;color:#fff}.secondary{background:#6c757d;color:#fff}.danger{background:#dc3545;color:#fff}
     .hidden{display:none}
     .tip{font-size:.9rem;color:#666;margin-top:6px}
     .highlight-label { color: #d63384; }
     
-    /* V9.5 Loading Overlay */
     #loading-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(255,255,255,0.9);z-index:999;display:none;flex-direction:column;align-items:center;justify-content:center;}
     .spinner{width:40px;height:40px;border:4px solid #f3f3f3;border-top:4px solid #007bff;border-radius:50%;animation:spin 1s linear infinite;margin-bottom:10px}
     @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+
+    #backup-area { display: none; margin-top: 10px; }
+    #backup-text { width: 100%; height: 100px; font-size: 0.8rem; color: #555; }
+    
+    /* V9.9 新增：库存统计样式 */
+    .inventory-stats-box {
+        background: #e7f1ff;
+        color: #0056b3;
+        padding: 12px;
+        border-radius: 6px;
+        margin-top: 16px;
+        font-size: 0.95rem;
+        line-height: 1.6;
+        border: 1px solid #b8daff;
+    }
+    .inventory-stats-box strong { font-weight: bold; color: #004085; }
   </style>
 </head>
 <body>
   <div id="loading-overlay">
     <div class="spinner"></div>
-    <div id="loading-text" style="font-weight:bold;color:#333">正在尝试不同组合...</div>
+    <div id="loading-text" style="font-weight:bold;color:#333">正在计算...</div>
     <div id="retry-count" style="color:#666;margin-top:5px">0 / 2000</div>
   </div>
 
   <div class="container">
-    <h2>发票组合计算器 (V9.6)</h2>
+    <h2>发票组合计算器 (V9.9)</h2>
 
     <div class="card">
       <label>目标开票金额</label>
@@ -118,7 +138,28 @@
 行2：统一社会信用代码"></textarea>
       <div id="header-history"></div>
 
-      <div class="tip" style="color:#007bff">★ 数据源：265条 (可下方修正)。</div>
+      <div id="inventory-stats" class="inventory-stats-box">
+          正在计算库存信息...
+      </div>
+    </div>
+
+    <div class="accordion">
+        <div class="accordion-header" id="backup-acc-header" style="background:#fff3cd;color:#856404;">
+          <span>📦 数据备份与恢复 (点此展开)</span>
+          <div class="arrow"></div>
+        </div>
+        <div class="accordion-content" id="backup-acc-content">
+          <div class="tip">1. <b>备份(导出)</b>：点击下方“备份数据”，若未下载文件，请手动全选复制文本框内容发给新设备。<br>2. <b>恢复(导入)</b>：点击“恢复数据”，选择之前备份的 json 文件。</div>
+          <div class="two-cols" style="margin-top:10px;">
+              <button id="backup-btn" style="background:#28a745;color:#fff;padding:10px;border:none;border-radius:4px;">备份数据 (iPad导出)</button>
+              <button id="restore-btn" style="background:#ffc107;color:#000;padding:10px;border:none;border-radius:4px;">恢复数据 (Mac导入)</button>
+          </div>
+          <div id="backup-area">
+              <label>备份内容（如果下载失败请复制这里）：</label>
+              <textarea id="backup-text" readonly></textarea>
+          </div>
+          <input type="file" id="restore-input" style="display:none" accept=".json">
+        </div>
     </div>
 
     <div class="accordion">
@@ -132,7 +173,6 @@
             <button id="btn-search-order">查询</button>
         </div>
         <div id="edit-result-area" style="margin-top:10px"></div>
-        <div class="tip">提示：修改金额后会自动保存，计算时将使用新金额。</div>
       </div>
     </div>
 
@@ -151,7 +191,7 @@
 
     <div class="accordion">
       <div class="accordion-header" id="debug-acc-header">
-        <span>调试日志（点击展开/收起）</span>
+        <span>调试日志</span>
         <div class="arrow"></div>
       </div>
       <div class="accordion-content" id="debug-acc-content" style="display:none;">
@@ -161,35 +201,37 @@
   </div>
 
   <div class="footer">
-    <button id="combine-btn" class="primary">一键组合</button>
-    <button id="copy-btn" class="secondary">复制结果</button>
-    <button id="reset-btn" class="secondary">重置库存</button>
+    <button id="combine-btn" class="primary btn-full">一键组合</button>
     
-    <button id="backup-btn" class="secondary" style="background:#17a2b8;color:#fff">备份数据</button>
-    <button id="restore-btn" class="secondary" style="background:#ffc107;color:#333">恢复数据</button>
-    <input type="file" id="restore-input" style="display:none" accept=".json">
+    <button id="copy-btn" class="secondary btn-half">复制结果</button>
+    <button id="reset-btn" class="secondary btn-half">重置库存</button>
     
-    <button id="confirm-delete-btn" class="danger hidden">确认删除</button>
+    <button id="confirm-delete-btn" class="danger btn-full hidden">确认删除</button>
   </div>
 
 <script>
-/* ====== 数据源 V9.3 ====== */
+// --- 数据源 (内置) ---
 const DATA_SOURCE = [
 {"order":"29844392230","amount":1240},{"order":"29787668582","amount":670},{"order":"29779855398","amount":670},{"order":"29758217446","amount":208},{"order":"29758125414","amount":670},{"order":"29754938534","amount":189},{"order":"29754882022","amount":740},{"order":"29723444262","amount":1180},{"order":"29722926822","amount":189},{"order":"29722933926","amount":590},{"order":"29722673446","amount":1770},{"order":"29722664486","amount":189},{"order":"29722661094","amount":490},{"order":"29722722854","amount":590},{"order":"29722357286","amount":490},{"order":"29722422118","amount":490},{"order":"29722343654","amount":490},{"order":"29721815398","amount":590},{"order":"29722199910","amount":1470},{"order":"29722121958","amount":590},{"order":"29722146598","amount":189},{"order":"29722006502","amount":590},{"order":"29722009638","amount":189},{"order":"29664786726","amount":1345},{"order":"29657407974","amount":960},{"order":"29657049766","amount":960},{"order":"29657089702","amount":1000},{"order":"29657268006","amount":1000},{"order":"29613864934","amount":990},{"order":"29613779238","amount":990},{"order":"29613146918","amount":1194},{"order":"29595224358","amount":1020},{"order":"29594630822","amount":1020},{"order":"29594980966","amount":1020},{"order":"29595121894","amount":1020},{"order":"29595097062","amount":1020},{"order":"29595222822","amount":1020},{"order":"29584577446","amount":1020},{"order":"29585686374","amount":1020},{"order":"29579912422","amount":990},{"order":"29613146918","amount":1194},{"order":"29595224358","amount":1020},{"order":"29594630822","amount":1020},{"order":"29594980966","amount":1020},{"order":"29595121894","amount":1020},{"order":"29595097062","amount":1020},{"order":"29595222822","amount":1020},{"order":"29584577446","amount":1020},{"order":"29585686374","amount":1020},{"order":"29579912422","amount":990},{"order":"29579148454","amount":990},{"order":"29578714086","amount":159},{"order":"29578467110","amount":990},{"order":"29578353894","amount":990},{"order":"29578045286","amount":1020},{"order":"29578181862","amount":1020},{"order":"29578056486","amount":2040},{"order":"29577984294","amount":2040},{"order":"29521294630","amount":1050},{"order":"29521271270","amount":1050},{"order":"29511656678","amount":1050},{"order":"29511582438","amount":1050},{"order":"29503897638","amount":1020},{"order":"29503915686","amount":1020},{"order":"29503479526","amount":1050},{"order":"29503480294","amount":1050},{"order":"29499944230","amount":1000},{"order":"29499944294","amount":1000},{"order":"29498897254","amount":1050},{"order":"29498897702","amount":1050},{"order":"29490917478","amount":1050},{"order":"29490868710","amount":1050},{"order":"29488269734","amount":1000},{"order":"29488521894","amount":1000},{"order":"29488129766","amount":1000},{"order":"29488684390","amount":1000},{"order":"29487024294","amount":1050},{"order":"29487043942","amount":1050},{"order":"29487038182","amount":1050},{"order":"29487022822","amount":1050},{"order":"29475651046","amount":1050},{"order":"29475572838","amount":1050},{"order":"29472654886","amount":1050},{"order":"29472546022","amount":1050},{"order":"29376457638","amount":1050},{"order":"29376618790","amount":1050},{"order":"29372705702","amount":1050},{"order":"29372746918","amount":1050},{"order":"29324981734","amount":1050},{"order":"29325052966","amount":1050},{"order":"29324565990","amount":1050},{"order":"29324610982","amount":1050},{"order":"29324176358","amount":1050},{"order":"29324204646","amount":1050},{"order":"29322723302","amount":2100},{"order":"29321161126","amount":2100},{"order":"29321200934","amount":2100},{"order":"29320710246","amount":3150},{"order":"29320689446","amount":5250},{"order":"29320422758","amount":1050},{"order":"29320229798","amount":2100},{"order":"29320212582","amount":2100},{"order":"29320259878","amount":5250},{"order":"29320237030","amount":1050},{"order":"29320311014","amount":5250},{"order":"29313551014","amount":2100},{"order":"29313528934","amount":5250},{"order":"29313330278","amount":5250},{"order":"29309418406","amount":5250},{"order":"29250020006","amount":1050},{"order":"29250000166","amount":4200},{"order":"29250087014","amount":5250},{"order":"29250059750","amount":1050},{"order":"29250018150","amount":3150},{"order":"29249976614","amount":4200},{"order":"29249801830","amount":5250},{"order":"29240651238","amount":5250},{"order":"29203828262","amount":3150},{"order":"29195981798","amount":1050},{"order":"29195932070","amount":1050},{"order":"29195980582","amount":1050},{"order":"29195981286","amount":1050},{"order":"29195705894","amount":2100},{"order":"29195678438","amount":2100},{"order":"29195667686","amount":1050},{"order":"29195761510","amount":1050},{"order":"29195733798","amount":1050},{"order":"29195721766","amount":1050},{"order":"29195728550","amount":1050},{"order":"29195559462","amount":1050},{"order":"29195615078","amount":1050},{"order":"29195500582","amount":1050},{"order":"29192155750","amount":2100},{"order":"29192157670","amount":2100},{"order":"29187893094","amount":1050},{"order":"29187884390","amount":1050},{"order":"29187450918","amount":1050},{"order":"29187453030","amount":1050},{"order":"29187413158","amount":1050},{"order":"29187431462","amount":1050},{"order":"29186986278","amount":1050},{"order":"29186994662","amount":1050},{"order":"29186704166","amount":1050},{"order":"29186524646","amount":5250},{"order":"29186336294","amount":3150},{"order":"29186354726","amount":3150},{"order":"29175575462","amount":1020},{"order":"29175636582","amount":1020},{"order":"29156266534","amount":3060},{"order":"29156274086","amount":3060},{"order":"29156045670","amount":1020},{"order":"29156085414","amount":1020},{"order":"29155498086","amount":2040},{"order":"29155589734","amount":2040},{"order":"29106863398","amount":229},{"order":"29085307238","amount":169},{"order":"29084841830","amount":845},{"order":"29041101926","amount":398},{"order":"29039226086","amount":995},{"order":"29039009830","amount":1393},{"order":"29038401830","amount":796},{"order":"29018396326","amount":796},{"order":"29008596838","amount":199},{"order":"29007762982","amount":5150},{"order":"29003278694","amount":209},{"order":"28964953318","amount":1010},{"order":"28965073958","amount":1010},{"order":"28957860134","amount":1010},{"order":"28957880934","amount":1010},{"order":"28945928166","amount":1010},{"order":"28945876774","amount":1010},{"order":"28941124646","amount":1010},{"order":"28941227494","amount":1010},{"order":"28940363750","amount":1010},{"order":"28940510694","amount":1010},{"order":"28940484134","amount":1010},{"order":"28940484582","amount":1010},{"order":"28940030374","amount":1010},{"order":"28939941734","amount":1010},{"order":"28939594534","amount":1010},{"order":"28939622054","amount":1010},{"order":"28934446950","amount":1010},{"order":"28934754086","amount":980},{"order":"28922217446","amount":1010},{"order":"28917119142","amount":1010},{"order":"28917546406","amount":1010},{"order":"28916902502","amount":980},{"order":"28916850278","amount":980},{"order":"28915493094","amount":1010},{"order":"28915621542","amount":1010},{"order":"28902560550","amount":980},{"order":"28902630502","amount":980},{"order":"28901966694","amount":980},{"order":"28901861734","amount":980},{"order":"28900709542","amount":980},{"order":"28900711270","amount":980},{"order":"28609574630","amount":1030},{"order":"28510891814","amount":450},{"order":"28510953062","amount":360},{"order":"28192753958","amount":970},{"order":"28192706790","amount":970},{"order":"28191451238","amount":1940},{"order":"28185388710","amount":3000},{"order":"28016488742","amount":990},{"order":"27989546470","amount":990},{"order":"27989054310","amount":990},{"order":"27989195302","amount":960},{"order":"27498602150","amount":2970},{"order":"27498949542","amount":2880},{"order":"27499031206","amount":4950},{"order":"27499056870","amount":4800},{"order":"27497737574","amount":4950},{"order":"27494179878","amount":990},{"order":"27493949158","amount":960},{"order":"27494024038","amount":990},{"order":"27493984614","amount":960},{"order":"27494228902","amount":990},{"order":"27494335398","amount":960},{"order":"27494049126","amount":3840},{"order":"27494017958","amount":3840},{"order":"27493623782","amount":960},{"order":"27493594598","amount":960},{"order":"27493467814","amount":960},{"order":"27493556646","amount":960},{"order":"27493456870","amount":1920},{"order":"27492798118","amount":960},{"order":"27493151398","amount":960},{"order":"27492642150","amount":960},{"order":"27473140390","amount":990},{"order":"27472936230","amount":2970},{"order":"27472964774","amount":990},{"order":"27462561958","amount":2970},{"order":"27460235046","amount":990},{"order":"27460354918","amount":960},{"order":"27460337702","amount":2970},{"order":"27309417766","amount":1020},{"order":"27309158246","amount":1020},{"order":"27309054566","amount":1020},{"order":"27307771942","amount":1020},{"order":"27306899942","amount":2040},{"order":"27266581350","amount":3060},{"order":"27249636582","amount":5100},{"order":"27239209510","amount":5150},{"order":"27232240614","amount":2020},{"order":"27231980262","amount":5050},{"order":"27232397414","amount":5050},{"order":"27231626022","amount":4120},{"order":"27224537510","amount":1010},{"order":"27136238886","amount":1050},{"order":"27136276518","amount":1050},{"order":"27134868582","amount":1050},{"order":"27134126886","amount":3150},{"order":"26790683558","amount":1040},{"order":"26693575462","amount":5050},{"order":"26388819174","amount":4160},{"order":"26373999526","amount":5200},{"order":"26211479910","amount":2060},{"order":"29722082086","amount":1770},{"order":"29722808550","amount":810},{"order":"29722753254","amount":567},{"order":"29722016806","amount":189},{"order":"29722015270","amount":490},{"order":"29721364070","amount":1770},{"order":"29721258726","amount":567},{"order":"29046424358","amount":597}
 ];
 
-/* ====== 配置区 V9.6 ====== */
 let inventory=[];
 let deleteRecords=JSON.parse(localStorage.getItem('deleteRecords_V9_2')||'[]');
+
+// --- V9.9 修改：每次保存库存时更新 UI 统计 ---
 const saveDeleteRecords=()=>localStorage.setItem('deleteRecords_V9_2',JSON.stringify(deleteRecords));
-const saveInventory    =()=>localStorage.setItem('invoiceInventory_V9_2',JSON.stringify(inventory));
+const saveInventory = () => {
+    localStorage.setItem('invoiceInventory_V9_2',JSON.stringify(inventory));
+    renderStats(); // 实时更新统计
+};
+
 const loadHeaderHistory=()=>JSON.parse(localStorage.getItem('headerHistory_V9_2')||'[]');
 const saveHeaderHistory=h=>{
   if(!h) return; const arr=loadHeaderHistory().filter(x=>x!==h);
   arr.unshift(h); if(arr.length>10) arr.pop();
   localStorage.setItem('headerHistory_V9_2',JSON.stringify(arr));
 };
-function log(msg){ const el=document.getElementById('debug-log'); const t=new Date().toLocaleTimeString(); el.textContent+=`[${t}] ${msg}\n`; }
+function log(msg){ const el=document.getElementById('debug-log'); const t=new Date().toLocaleTimeString(); if(el) el.textContent+=`[${t}] ${msg}\n`; }
 
 function normalize(raw){
   const map=new Map();
@@ -202,22 +244,54 @@ function normalize(raw){
 }
 const makeKey=o=>o.order+'|'+o.amount;
 
-/* ====== 加载逻辑 ====== */
+// --- V9.9 新增：库存统计渲染函数 ---
+function renderStats() {
+    const el = document.getElementById('inventory-stats');
+    if (!el) return;
+    
+    if (!inventory || inventory.length === 0) {
+        el.innerHTML = '<strong>📊 库存概览：</strong><br>当前库存为空 (0 条记录)。';
+        return;
+    }
+    
+    const count = inventory.length;
+    // 计算总金额
+    const total = inventory.reduce((a, b) => a + b.amount, 0);
+    // 计算最小和最大金额 (处理空数组情况)
+    let min = 0, max = 0;
+    if (count > 0) {
+        // 使用 reduce 避免 spread operator 栈溢出风险
+        min = inventory.reduce((m, p) => (p.amount < m ? p.amount : m), inventory[0].amount);
+        max = inventory.reduce((m, p) => (p.amount > m ? p.amount : m), inventory[0].amount);
+    }
+    
+    // 格式化数字
+    const fmt = (n) => n.toLocaleString();
+    
+    el.innerHTML = `<strong>📊 库存概览：</strong><br>` +
+                   `数量：${fmt(count)} 张 &nbsp;|&nbsp; 总额：${fmt(total)} 元<br>` +
+                   `范围：${fmt(min)} — ${fmt(max)} 元`;
+}
+
 async function loadInventory(forceReset=false){
   if(!forceReset){
     const local=JSON.parse(localStorage.getItem('invoiceInventory_V9_2')||'null');
-    if(local){ inventory=normalize(local); log(`从缓存读取：${inventory.length} 条`); return; }
+    if(local){ 
+        inventory=normalize(local); 
+        log(`从缓存读取：${inventory.length} 条`); 
+        renderStats(); // 读取缓存后更新统计
+        return; 
+    }
   }
   log(`读取内置源数据：共 ${DATA_SOURCE.length} 条记录...`);
   inventory=normalize(DATA_SOURCE); 
-  saveInventory();
+  saveInventory(); // 保存并更新统计
   if(forceReset){ 
     deleteRecords=[]; saveDeleteRecords(); 
     log(`已重置。去重后有效库存：${inventory.length} 条`); 
   }
 }
 
-/* ====== UI 渲染 (V9.6 更新：单单恢复) ====== */
 function renderHeaderHistory(){
   const div=document.getElementById('header-history'); div.innerHTML='';
   loadHeaderHistory().forEach((h,i)=>{
@@ -230,27 +304,19 @@ function renderHeaderHistory(){
   });
 }
 
-// V9.6 重写：渲染删除记录，支持单条恢复
 function renderDeleteRecords(){
   const list=document.getElementById('record-list'); list.innerHTML='';
-  
   if(deleteRecords.length === 0) {
       list.innerHTML = '<div style="padding:10px;text-align:center;color:#999">暂无删除记录</div>';
       return;
   }
-
   deleteRecords.slice(0,20).forEach((batch, batchIdx)=>{
     const total=batch.reduce((s,inv)=>s+inv.sum,0);
     const item=document.createElement('div'); item.className='record-item';
-    
-    // 标题部分
     let html = `<div class="record-title">批次 ${batchIdx+1}：共 ${batch.length} 张发票，合计 ${total} 元</div>`;
-    
-    // 订单列表部分
     html += `<div class="orders">`;
     batch.forEach((inv, invIdx) => {
         inv.orders.forEach((o, orderIdx) => {
-           // 为每个订单生成唯一ID方便JS调用，这里直接用onclick传递索引
            html += `
              <div class="single-order-row">
                <span>订单：${o.order}，金额：${o.amount}元</span>
@@ -260,113 +326,39 @@ function renderDeleteRecords(){
         });
     });
     html += `</div>`;
-    
-    // 整批恢复按钮
     html += `<button class="btn-recover-batch" onclick="recoverBatch(${batchIdx})">恢复整批数据</button>`;
-    
     item.innerHTML=html;
     list.appendChild(item);
   });
 }
 
-// V9.6 新增：单条订单恢复逻辑
-window.recoverSingleOrder = function(batchIdx, invIdx, orderIdx) {
-    const batch = deleteRecords[batchIdx];
-    if(!batch) return;
-    const inv = batch[invIdx];
-    if(!inv) return;
-    const order = inv.orders[orderIdx];
-    if(!order) return;
-
-    // 1. 恢复到库存
-    // 检查库存里是否已经有了（防止重复）
-    if(!inventory.find(x => makeKey(x) === makeKey(order))) {
-        inventory.push(order);
-    }
-    inventory = normalize(inventory);
-    
-    // 2. 从记录中删除该订单
-    inv.orders.splice(orderIdx, 1);
-    
-    // 3. 重新计算该发票的 sum (虽然显示上可能不再重要，但保持数据一致性)
-    inv.sum = inv.orders.reduce((a, b) => a + b.amount, 0);
-
-    // 4. 清理空数据：如果该发票没订单了，删掉发票；如果该批次没发票了，删掉批次
-    if(inv.orders.length === 0) {
-        batch.splice(invIdx, 1);
-    }
-    if(batch.length === 0) {
-        deleteRecords.splice(batchIdx, 1);
-    }
-
-    // 5. 保存并刷新
-    saveDeleteRecords();
-    saveInventory();
-    renderDeleteRecords();
-    log(`已单独恢复订单：${order.order}`);
-};
-
-// V9.6 封装：整批恢复逻辑
-window.recoverBatch = function(batchIdx) {
-    const rec = deleteRecords.splice(batchIdx, 1)[0];
-    if(rec) {
-        rec.forEach(inv => inv.orders.forEach(o => {
-            if(!inventory.find(x => makeKey(x) === makeKey(o))) inventory.push(o);
-        }));
-        inventory = normalize(inventory);
-        saveDeleteRecords();
-        saveInventory();
-        renderDeleteRecords();
-        log(`已恢复整批数据 (批次 ${batchIdx+1})`);
-    }
-};
-
-function bindAccordion(h,c){ h.addEventListener('click',()=>{ const open=c.style.display==='block'; c.style.display=open?'none':'block'; h.classList.toggle('open',!open); }); }
-
-/* ====== V9.3 搜索与修正 ====== */
 function renderEditSearch(){
   const input = document.getElementById('search-order-input');
   const btn = document.getElementById('btn-search-order');
   const area = document.getElementById('edit-result-area');
-
   btn.onclick = () => {
     const val = input.value.trim();
     if(!val) return alert('请输入订单号');
     area.innerHTML = '';
-    
     const found = inventory.filter(o => o.order.includes(val));
     if(found.length === 0){
       area.innerHTML = '<div style="color:red;padding:10px 0;">未找到相关订单。</div>';
       return;
     }
-
     found.forEach(item => {
-      const div = document.createElement('div');
-      div.className = 'edit-row';
-      div.innerHTML = `
-        <span>订单: ${item.order} <br> 原额: ${item.amount}</span>
-        <input type="number" value="${item.amount}">
-        <button class="btn-update">保存</button>
-      `;
-      
+      const div = document.createElement('div'); div.className = 'edit-row';
+      div.innerHTML = `<span>订单: ${item.order} <br> 原额: ${item.amount}</span><input type="number" value="${item.amount}"><button class="btn-update">保存</button>`;
       const newValInput = div.querySelector('input');
       const saveBtn = div.querySelector('.btn-update');
-      
       saveBtn.onclick = () => {
         const newAmt = Math.round(Number(newValInput.value));
         if(!newAmt || newAmt <= 0) return alert('金额必须大于0');
         const oldKey = makeKey(item);
         const idx = inventory.findIndex(x => makeKey(x) === oldKey);
-        
-        if(idx === -1) {
-          alert('数据已过期或不存在，请重新搜索');
-          return;
-        }
-
+        if(idx === -1) { alert('数据已过期或不存在，请重新搜索'); return; }
         inventory[idx].amount = newAmt;
         inventory = normalize(inventory);
-        saveInventory();
-        
+        saveInventory(); // 自动更新 UI
         alert(`订单 ${item.order} 金额已更新为 ${newAmt}`);
         log(`修正数据：订单 ${item.order} 从 ${item.amount} -> ${newAmt}`);
         btn.click(); 
@@ -376,7 +368,38 @@ function renderEditSearch(){
   };
 }
 
-/* ====== 工具：洗牌算法 ====== */
+/* Actions */
+window.recoverSingleOrder = function(batchIdx, invIdx, orderIdx) {
+    const batch = deleteRecords[batchIdx]; if(!batch) return;
+    const inv = batch[invIdx]; if(!inv) return;
+    const order = inv.orders[orderIdx]; if(!order) return;
+    if(!inventory.find(x => makeKey(x) === makeKey(order))) { inventory.push(order); }
+    inventory = normalize(inventory);
+    inv.orders.splice(orderIdx, 1);
+    inv.sum = inv.orders.reduce((a, b) => a + b.amount, 0);
+    if(inv.orders.length === 0) { batch.splice(invIdx, 1); }
+    if(batch.length === 0) { deleteRecords.splice(batchIdx, 1); }
+    saveDeleteRecords(); 
+    saveInventory(); // 自动更新 UI
+    renderDeleteRecords();
+    log(`已单独恢复订单：${order.order}`);
+};
+
+window.recoverBatch = function(batchIdx) {
+    const rec = deleteRecords.splice(batchIdx, 1)[0];
+    if(rec) {
+        rec.forEach(inv => inv.orders.forEach(o => {
+            if(!inventory.find(x => makeKey(x) === makeKey(o))) inventory.push(o);
+        }));
+        inventory = normalize(inventory);
+        saveDeleteRecords(); 
+        saveInventory(); // 自动更新 UI
+        renderDeleteRecords();
+        log(`已恢复整批数据 (批次 ${batchIdx+1})`);
+    }
+};
+
+function bindAccordion(h,c){ h.addEventListener('click',()=>{ const open=c.style.display==='block'; c.style.display=open?'none':'block'; h.classList.toggle('open',!open); }); }
 function shuffleArray(array) {
   let currentIndex = array.length,  randomIndex;
   while (currentIndex != 0) {
@@ -387,21 +410,15 @@ function shuffleArray(array) {
   return array;
 }
 
-/* ====== 核心算法 ====== */
+/* Algorithm */
 function selectOrdersByDP(target, maxSingle, allowApprox, onlyHigher, minOrderStr, maxOrderStr, usePool){
-  // 使用传入的 pool（可能是乱序的）
   let pool = usePool.slice();
-
-  // 筛选逻辑
   if(minOrderStr) pool = pool.filter(o => o.order >= minOrderStr);
   if(maxOrderStr) pool = pool.filter(o => o.order <= maxOrderStr);
   if(maxSingle > 0) pool = pool.filter(o => o.amount <= maxSingle);
-
   if(pool.length === 0) return null;
-
   const hi = allowApprox ? (target+500) : target;
   const dp = Array(hi+1).fill(null); dp[0]={cnt:0,picks:[]};
-  
   for(let i=0;i<pool.length;i++){
     const a=pool[i].amount|0;
     for(let s=hi;s>=a;s--){
@@ -410,9 +427,7 @@ function selectOrdersByDP(target, maxSingle, allowApprox, onlyHigher, minOrderSt
       }
     }
   }
-
   if(dp[target]) return {sum:target, orders: dp[target].picks.map(i=>pool[i])};
-
   if(!allowApprox) return null;
   for(let d=1; d<=500; d++){
     const sUp = target + d;
@@ -434,11 +449,9 @@ function splitWithCapBacktrack(selectedOrders, minS, maxS, maxSame){
   }
   const lo=(minS>0)?minS:1;
   const hi=(maxS>0)?maxS:selectedOrders.reduce((a,o)=>a+o.amount,0);
-
   let avail=selectedOrders.slice();
   const capMap=new Map();
   const keyOf=o=>o.order+'|'+o.amount;
-
   function bestSubsetInRange(avail, lo, hi){
     const maxSum=Math.min(hi, avail.reduce((a,o)=>a+o.amount,0));
     const dp=Array(maxSum+1).fill(null); dp[0]={cnt:0,picks:[]};
@@ -455,7 +468,6 @@ function splitWithCapBacktrack(selectedOrders, minS, maxS, maxSame){
     }
     return null;
   }
-
   function genCandidates(av,limit=8){
     const cands=[];
     const step=Math.max(1, Math.floor((hi-lo)/24));
@@ -470,7 +482,6 @@ function splitWithCapBacktrack(selectedOrders, minS, maxS, maxSame){
     }
     return cands;
   }
-
   const memo=new Set();
   function sig(av){
     const hist=new Map(); av.forEach(o=>hist.set(o.amount,(hist.get(o.amount)||0)+1));
@@ -478,18 +489,15 @@ function splitWithCapBacktrack(selectedOrders, minS, maxS, maxSame){
     const cm=Array.from(capMap.entries()).sort((a,b)=>a[0]-b[0]).map(([k,v])=>k+':'+v).join(',');
     return hm+'|'+cm;
   }
-
   function dfs(av){
     if(av.length===0) return [];
     const signature=sig(av); if(memo.has(signature)) return null;
-
     const cands=genCandidates(av,8);
     for(const cand of cands){
       if(!cand) continue;
       const pick=cand.picks.map(i=>av[i]);
       const used=new Set(pick.map(keyOf));
       const rest=av.filter(o=>!used.has(keyOf(o)));
-
       capMap.set(cand.sum,(capMap.get(cand.sum)||0)+1);
       const sub=dfs(rest);
       if(sub){ return [{sum:cand.sum,orders:pick}, ...sub]; }
@@ -499,7 +507,6 @@ function splitWithCapBacktrack(selectedOrders, minS, maxS, maxSame){
     memo.add(signature);
     return null;
   }
-
   return dfs(avail);
 }
 
@@ -507,9 +514,7 @@ function splitFixedCount(selectedOrders, minS, maxS, k){
   const lo=(minS>0)?minS:1;
   const total=selectedOrders.reduce((a,o)=>a+o.amount,0);
   const hi=(maxS>0)?maxS:total;
-
   const base=selectedOrders.map((o,idx)=>({...o,__uid:'u'+idx}));
-
   function bestSubsetInRangeEx(avail, lo, hi){
     const maxSum=Math.min(hi, avail.reduce((a,o)=>a+o.amount,0));
     const dp=Array(maxSum+1).fill(null); dp[0]={cnt:0,picks:[]};
@@ -526,18 +531,14 @@ function splitFixedCount(selectedOrders, minS, maxS, k){
     }
     return null;
   }
-
   const memo=new Map();
   function sig(remT,k,avail){
     const hist=new Map(); avail.forEach(x=>hist.set(x.amount,(hist.get(x.amount)||0)+1));
     const hm=[...hist.entries()].sort((a,b)=>a[0]-b[0]).map(([v,c])=>v+':'+c).join(',');
     return remT+'|'+k+'|'+hm;
   }
-
   function dfs(remT,k,avail){
-    const key=sig(remT,k,avail);
-    if(memo.has(key)) return memo.get(key);
-
+    const key=sig(remT,k,avail); if(memo.has(key)) return memo.get(key);
     if(k===1){
       const dp=Array(remT+1).fill(null); dp[0]=[];
       for(let i=0;i<avail.length;i++){
@@ -553,14 +554,11 @@ function splitFixedCount(selectedOrders, minS, maxS, k){
       const res=[{sum,orders:pick.map(x=>({order:x.order,amount:x.amount}))}];
       memo.set(key,res); return res;
     }
-
     const upper=Math.min(hi, remT-(k-1)*lo);
     const lower=Math.max(lo, remT-(k-1)*hi);
     if(lower>upper){ memo.set(key,null); return null; }
-
     const first=bestSubsetInRangeEx(avail, lower, upper);
     if(!first){ memo.set(key,null); return null; }
-
     const trySubs=[];
     for(let s=first.sum; s>=lower && trySubs.length<8; s--){
       const t=bestSubsetInRangeEx(avail, s, s);
@@ -575,18 +573,13 @@ function splitFixedCount(selectedOrders, minS, maxS, k){
     }
     memo.set(key,null); return null;
   }
-
   return dfs(total, k, base);
 }
-
-// 纯计算函数
 function tryCompute(target, minS, maxS, maxSame, invoiceCount, allowApprox, onlyHigher, filterMin, filterMax, pool){
   const pickRes = selectOrdersByDP(target, maxS||0, allowApprox, onlyHigher, filterMin, filterMax, pool);
   if(!pickRes) return null;
-  
   const selected = pickRes.orders;
   const totalSel = pickRes.sum;
-
   if(invoiceCount && invoiceCount>0){
     const fixed = splitFixedCount(selected, minS||0, maxS||0, invoiceCount);
     if(fixed && fixed.reduce((a,inv)=>a+inv.sum,0)===totalSel) return fixed;
@@ -598,23 +591,16 @@ function tryCompute(target, minS, maxS, maxSame, invoiceCount, allowApprox, only
   }
 }
 
-/* ====== 入口绑定 ====== */
 document.addEventListener('DOMContentLoaded', async ()=>{
   await loadInventory();
   renderHeaderHistory();
   renderDeleteRecords();
   renderEditSearch(); 
-
-  const debugH=document.getElementById('debug-acc-header');
-  const debugC=document.getElementById('debug-acc-content');
-  const delH=document.getElementById('del-acc-header');
-  const delC=document.getElementById('record-list');
-  const editH=document.getElementById('edit-acc-header'); 
-  const editC=document.getElementById('edit-acc-content'); 
   
-  bindAccordion(debugH,debugC);
-  bindAccordion(delH,delC);
-  bindAccordion(editH,editC);
+  bindAccordion(document.getElementById('debug-acc-header'),document.getElementById('debug-acc-content'));
+  bindAccordion(document.getElementById('del-acc-header'),document.getElementById('record-list'));
+  bindAccordion(document.getElementById('edit-acc-header'),document.getElementById('edit-acc-content'));
+  bindAccordion(document.getElementById('backup-acc-header'),document.getElementById('backup-acc-content'));
 
   document.getElementById('reset-btn').onclick=async()=>{
     if(confirm('确定要重置并恢复初始数据吗？(删除记录将被清空，手动修改也将丢失)')){
@@ -625,15 +611,12 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   };
 
   let lastInv=null;
-
   document.getElementById('combine-btn').onclick=async ()=>{
     const outEl=document.getElementById('result-output');
     const logEl=document.getElementById('debug-log');
     const loadEl=document.getElementById('loading-overlay');
     const retryTxt=document.getElementById('retry-count');
-
     outEl.textContent=''; logEl.textContent='';
-    
     const tgt=+document.getElementById('target-input').value;
     if(!tgt) return alert('请输入目标金额');
     const minS=+document.getElementById('min-single').value||0;
@@ -646,42 +629,26 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     const header=document.getElementById('company-header').value.trim();
     const filterOrderMin = document.getElementById('filter-order-min').value.trim();
     const filterOrderMax = document.getElementById('filter-order-max').value.trim();
-
     saveHeaderHistory(header); renderHeaderHistory();
-
     const maxRetries = (isFinite(msc) || ic > 0) ? 2000 : 1; 
-    let attempt = 0;
-    let success = null;
-
+    let attempt = 0; let success = null;
     loadEl.style.display = 'flex';
-    
     setTimeout(async () => {
         const startTime = Date.now();
-        
         while(attempt < maxRetries){
             attempt++;
             retryTxt.textContent = `${attempt} / ${maxRetries}`;
-            
             let currentPool = inventory.slice();
             if(attempt > 1) shuffleArray(currentPool);
-
             const res = tryCompute(tgt, minS, maxS, msc, ic, allowApprox, onlyHigher, filterOrderMin, filterOrderMax, currentPool);
-            
-            if(res){
-                success = res;
-                break;
-            }
+            if(res){ success = res; break; }
             if(attempt % 50 === 0) await new Promise(r => setTimeout(r, 0));
         }
-
         loadEl.style.display = 'none';
-        
         const duration = ((Date.now() - startTime)/1000).toFixed(2);
         log(`计算完成：耗时 ${duration}秒，尝试次数 ${attempt}`);
-
         if(!success){
-            outEl.textContent=`无法组合出满足条件的金额 (已尝试 ${attempt} 种随机组合)。\n建议：\n1. 放宽“相同金额张数”限制\n2. 调整目标金额或订单范围`;
-            debugC.style.display='block'; debugH.classList.add('open');
+            outEl.textContent=`无法组合出满足条件的金额 (已尝试 ${attempt} 种随机组合)。`;
         } else {
             const out=[];
             success.forEach((inv,i)=>{
@@ -697,45 +664,55 @@ document.addEventListener('DOMContentLoaded', async ()=>{
         }
     }, 50);
   };
-
   document.getElementById('confirm-delete-btn').onclick=()=>{
     if(!lastInv) return;
     deleteRecords.unshift(lastInv);
     const removeSet=new Set(lastInv.flatMap(inv=>inv.orders.map(makeKey)));
     inventory=inventory.filter(o=>!removeSet.has(makeKey(o)));
-    saveDeleteRecords(); saveInventory(); renderDeleteRecords();
-    delC.style.display='block'; delH.classList.add('open');
+    saveDeleteRecords(); 
+    saveInventory(); // 更新统计
+    renderDeleteRecords();
+    document.getElementById('record-list').style.display='block';
     document.getElementById('confirm-delete-btn').classList.add('hidden');
-    log(`已确认删除；库存剩余 ${inventory.length} 条`);
   };
-
   document.getElementById('copy-btn').onclick=()=>{
     navigator.clipboard.writeText(document.getElementById('result-output').textContent);
     alert('结果已复制');
   };
 
-  /* ====== 新增：数据备份与恢复 (V9.6 Plus) ====== */
+  /* 备份逻辑 */
   document.getElementById('backup-btn').onclick = () => {
     const data = {
       inventory: localStorage.getItem('invoiceInventory_V9_2'),
       deleteRecords: localStorage.getItem('deleteRecords_V9_2'),
       headerHistory: localStorage.getItem('headerHistory_V9_2')
     };
-    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `invoice_backup_${new Date().toISOString().slice(0,10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    alert('备份文件已生成，请保存。');
+    const jsonStr = JSON.stringify(data);
+    
+    try {
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `invoice_backup_${new Date().toISOString().slice(0,10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    } catch(e) {
+        console.error("下载失败，转为文本展示", e);
+    }
+
+    const txtArea = document.getElementById('backup-text');
+    const areaDiv = document.getElementById('backup-area');
+    txtArea.value = jsonStr;
+    areaDiv.style.display = 'block';
+    document.getElementById('backup-acc-content').style.display='block';
+    alert('备份数据已生成！\n\n如果浏览器没有自动下载文件，请全选复制下方的文本框内容，发送到新设备即可。');
   };
 
   document.getElementById('restore-btn').onclick = () => {
     document.getElementById('restore-input').click();
   };
-
   document.getElementById('restore-input').onchange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -743,7 +720,6 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     reader.onload = (ev) => {
       try {
         const data = JSON.parse(ev.target.result);
-        // 使用与 V9.6 相同的 LocalStorage Key
         if (data.inventory) localStorage.setItem('invoiceInventory_V9_2', data.inventory);
         if (data.deleteRecords) localStorage.setItem('deleteRecords_V9_2', data.deleteRecords);
         if (data.headerHistory) localStorage.setItem('headerHistory_V9_2', data.headerHistory);
