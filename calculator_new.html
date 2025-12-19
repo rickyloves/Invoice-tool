@@ -2,121 +2,145 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票智能控制台 V12.0 - Liquid Silk</title>
+  <title>发票智能控制台 V13.0 - Apple Intelligence</title>
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <style>
+    /* V13.0 Design Language: Liquid Apple 2026
+       Focus: Consistency, Spaciousness, Utility
+    */
     :root {
       --primary: #0071e3;
-      --bg-gradient: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-      --glass: rgba(255, 255, 255, 0.6);
-      --glass-border: rgba(255, 255, 255, 0.4);
+      --bg-gradient: linear-gradient(160deg, #f2f5f9 0%, #e2e8f0 100%);
+      --glass: rgba(255, 255, 255, 0.75);
+      --glass-border: rgba(255, 255, 255, 0.6);
       --text-main: #1d1d1f;
       --text-sub: #6e6e73;
-      --accent-soft: rgba(0, 113, 227, 0.08);
-      --shadow-sm: 0 4px 12px rgba(0,0,0,0.03);
-      --shadow-lg: 0 12px 40px rgba(0,0,0,0.08);
+      --danger: #ff3b30;
+      --success: #34c759;
+      --blur: 25px;
     }
+
+    /* 优化1：移除数字框箭头 */
+    input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; }
 
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
     body {
       background: var(--bg-gradient);
       background-attachment: fixed;
       color: var(--text-main);
-      font-family: "SF Pro Display", -apple-system, sans-serif;
-      padding-bottom: 140px;
+      font-family: "SF Pro Display", -apple-system, system-ui, sans-serif;
+      padding-bottom: 160px;
       min-height: 100vh;
     }
 
-    .main-container { width: 92%; max-width: 1200px; margin: 40px auto; }
+    .main-container { width: 94%; max-width: 1240px; margin: 40px auto; }
     
-    /* 标题美化 */
-    header { margin-bottom: 35px; }
-    h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.8px; display: flex; align-items: center; gap: 12px; }
-    h1 span { font-size: 14px; font-weight: 400; color: var(--text-sub); background: rgba(0,0,0,0.05); padding: 2px 10px; border-radius: 6px; }
+    h1 { font-size: 30px; font-weight: 700; letter-spacing: -1px; margin-bottom: 40px; display: flex; align-items: center; gap: 15px; }
+    h1::before { content: ""; width: 6px; height: 30px; background: var(--primary); border-radius: 10px; }
 
-    /* 左右分栏 */
-    .dashboard { display: grid; grid-template-columns: 1fr 1.1fr; gap: 28px; align-items: start; }
+    .dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
 
-    /* 液态玻璃卡片 */
+    /* 优化5：标题风格美化 */
+    .card-title {
+      font-size: 15px; font-weight: 700; color: var(--text-main); 
+      margin-bottom: 20px; display: flex; align-items: center; gap: 8px;
+      letter-spacing: 0.2px;
+    }
+    .card-title::after { content: ""; flex: 1; height: 1px; background: rgba(0,0,0,0.05); }
+
     .card {
       background: var(--glass);
-      backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+      backdrop-filter: blur(var(--blur)); -webkit-backdrop-filter: blur(var(--blur));
       border: 1px solid var(--glass-border);
-      border-radius: 24px;
-      padding: 28px;
-      box-shadow: var(--shadow-lg);
-      margin-bottom: 28px;
-      transition: transform 0.3s ease;
+      border-radius: 28px;
+      padding: 30px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.04);
+      margin-bottom: 30px;
     }
 
-    label { display: block; font-size: 12px; font-weight: 700; color: var(--text-sub); margin-bottom: 10px; letter-spacing: 0.8px; text-transform: uppercase; }
+    label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sub); margin-bottom: 8px; margin-top: 18px; }
+    label:first-of-type { margin-top: 0; }
 
-    /* 输入框设计 */
     input, textarea {
       width: 100%; border: 1px solid rgba(0,0,0,0.08); border-radius: 14px;
-      padding: 12px 16px; font-size: 15px; background: rgba(255,255,255,0.4);
-      transition: all 0.2s; color: var(--text-main);
+      padding: 14px 18px; font-size: 15px; background: rgba(255,255,255,0.5);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); color: var(--text-main);
     }
     input:focus { background: #fff; border-color: var(--primary); outline: none; box-shadow: 0 0 0 4px rgba(0,113,227,0.1); }
 
-    .flex-grid { display: flex; gap: 15px; margin-bottom: 15px; }
+    .flex-grid { display: flex; gap: 20px; margin-bottom: 18px; }
     .flex-grid > div { flex: 1; }
 
-    /* 仪表盘统计 */
-    .stats-row { display: flex; gap: 15px; margin-top: 15px; }
+    /* 统计面板 */
+    .stat-row { display: flex; gap: 20px; }
     .stat-box {
-      flex: 1; background: rgba(255,255,255,0.4); padding: 20px 15px; border-radius: 20px;
-      text-align: center; border: 1px solid rgba(255,255,255,0.5);
+      flex: 1; background: rgba(255,255,255,0.5); padding: 25px 20px; border-radius: 22px;
+      text-align: center; border: 1px solid rgba(255,255,255,0.8);
     }
-    .stat-box b { display: block; font-size: 24px; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
-    .stat-box span { font-size: 11px; color: var(--text-sub); font-weight: 600; }
+    .stat-box b { display: block; font-size: 28px; font-weight: 800; color: var(--primary); margin-bottom: 4px; }
+    .stat-box span { font-size: 12px; color: var(--text-sub); font-weight: 600; }
 
-    /* 历史记录 - 丝滑列表 */
-    .record-list { max-height: 500px; overflow-y: auto; padding-right: 8px; }
+    /* 优化3：删除记录排版 */
     .record-item {
-      background: rgba(255,255,255,0.4); border-radius: 18px; padding: 20px; margin-bottom: 15px;
+      background: rgba(255,255,255,0.4); border-radius: 20px; padding: 25px; margin-bottom: 20px;
       border: 1px solid var(--glass-border);
     }
     .order-line {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 10px 14px; margin-bottom: 8px; background: rgba(255,255,255,0.5);
-      border-radius: 12px; font-size: 14px;
+      padding: 12px 16px; margin-bottom: 10px; background: rgba(255,255,255,0.6);
+      border-radius: 14px; font-size: 15px; border: 1px solid rgba(255,255,255,0.9);
     }
+    .order-line b { color: var(--primary); font-weight: 700; margin-left: 5px; }
     
-    /* 按钮设计 */
-    button { cursor: pointer; border: none; font-weight: 600; transition: all 0.2s cubic-bezier(0.15, 0, 0.15, 1); }
+    button { cursor: pointer; border: none; font-weight: 600; transition: all 0.25s; }
     .btn-recover {
-      background: var(--primary); color: #fff; padding: 6px 16px; border-radius: 20px; font-size: 12px;
+      background: #fff; color: var(--primary); padding: 8px 18px; border-radius: 20px; 
+      font-size: 13px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
-    .btn-recover:hover { opacity: 0.9; transform: scale(1.05); }
-    .btn-batch { width: 100%; margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.04); color: var(--text-sub); border-radius: 12px; font-size: 13px; }
+    .btn-recover:hover { background: var(--primary); color: #fff; }
+    .btn-batch { width: 100%; margin-top: 15px; padding: 14px; background: rgba(0,0,0,0.03); color: var(--text-sub); border-radius: 16px; font-size: 14px; }
+    .btn-batch:hover { background: rgba(0,0,0,0.06); color: var(--text-main); }
 
-    /* 结果显示 - 宽屏视野 */
+    /* 优化2：查询按钮间距 */
+    .search-btn-container { margin-top: 15px; display: flex; justify-content: flex-start; }
+    .btn-search { background: var(--primary); color: white; padding: 10px 25px; border-radius: 12px; font-size: 14px; }
+
     #result-output {
-      font-family: "SF Mono", "Menlo", monospace; font-size: 14px; line-height: 1.8;
-      background: rgba(255,255,255,0.4); padding: 30px; border-radius: 20px; 
-      min-height: 200px; white-space: pre; overflow-x: auto; border: 1px solid rgba(255,255,255,0.5);
+      font-family: "SF Mono", "Menlo", monospace; font-size: 15px; line-height: 2;
+      background: rgba(255,255,255,0.4); padding: 35px; border-radius: 24px; 
+      min-height: 220px; white-space: pre; overflow-x: auto; border: 1px solid rgba(255,255,255,0.8);
     }
 
-    /* 灵动岛底部操作栏 */
+    /* 优化6：底部控制栏（浅色全息风格） */
     .island-footer {
-      position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-      background: rgba(29, 29, 31, 0.8); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-      padding: 12px 24px; border-radius: 24px; display: flex; gap: 16px; align-items: center;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.2); z-index: 1000;
+      position: fixed; bottom: 35px; left: 50%; transform: translateX(-50%);
+      background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+      padding: 15px 35px; border-radius: 30px; display: flex; gap: 20px; align-items: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.12); z-index: 1000; border: 1px solid rgba(255,255,255,0.5);
     }
-    .btn-island-main { background: var(--primary); color: white; padding: 12px 30px; border-radius: 16px; font-size: 15px; }
-    .btn-island-ghost { background: transparent; color: white; padding: 10px 15px; border-radius: 12px; font-size: 14px; opacity: 0.8; }
-    .btn-island-ghost:hover { opacity: 1; background: rgba(255,255,255,0.1); }
+    .btn-island-main { 
+        background: linear-gradient(135deg, #0071e3, #00c6ff); color: white; 
+        padding: 14px 35px; border-radius: 18px; font-size: 16px; font-weight: 700;
+        box-shadow: 0 8px 20px rgba(0, 113, 227, 0.25);
+    }
+    .btn-island-ghost { background: #f2f2f7; color: var(--text-main); padding: 12px 20px; border-radius: 14px; font-size: 14px; }
+    .btn-island-ghost:hover { background: #e5e5ea; }
 
-    .history-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-    .chip { background: rgba(255,255,255,0.8); padding: 6px 14px; border-radius: 10px; font-size: 12px; border: 1px solid rgba(0,0,0,0.05); cursor: pointer; }
+    /* 优化4：呼吸灯状态栏 */
+    .status-bar { display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 700; color: #555; }
+    .status-dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; box-shadow: 0 0 8px var(--success); animation: breathe 2s infinite; }
+    @keyframes breathe { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+    .history-chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; }
+    .chip { background: #fff; padding: 7px 16px; border-radius: 12px; font-size: 13px; border: 1px solid rgba(0,0,0,0.04); cursor: pointer; }
+    .chip:hover { border-color: var(--primary); color: var(--primary); }
 
     #loading-overlay {
       position: fixed; inset: 0; background: rgba(255,255,255,0.9); z-index: 2000;
-      display: none; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(10px);
+      display: none; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(15px);
     }
-    .spinner { width: 40px; height: 40px; border: 3px solid #eee; border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s infinite linear; }
+    .spinner { width: 50px; height: 50px; border: 4px solid #f2f2f7; border-top-color: var(--primary); border-radius: 50%; animation: spin 1s infinite linear; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .hidden { display: none !important; }
   </style>
@@ -125,29 +149,28 @@
 
 <div id="loading-overlay">
   <div class="spinner"></div>
-  <p style="margin-top:20px; font-weight:600; letter-spacing: 1px;">OPTIMIZING COMBINATIONS</p>
-  <p id="retry-count" style="font-family:monospace; font-size:12px; color:var(--text-sub); margin-top:5px;">0 / 2000</p>
+  <p style="margin-top:25px; font-weight:700; font-size:18px; letter-spacing: -0.5px;">正在构建最优发票组合方案...</p>
+  <p id="retry-count" style="font-family:monospace; font-size:13px; color:var(--text-sub); margin-top:8px;">ATTEMPT: 0 / 2000</p>
 </div>
 
 <div class="main-container">
-  <header>
-    <h1>发票智能计算控制台 <span>V12.0 Liquid Silk</span></h1>
-  </header>
+  <h1>控制台 <span>Apple Intelligence v13.0</span></h1>
 
   <div class="dashboard">
     <div class="column">
       <div class="card">
-        <label>目标开票金额 (Target)</label>
-        <input id="target-input" type="number" placeholder="0.00" style="font-size: 32px; font-weight: 700; color:var(--primary); padding: 15px 0; background:none; border:none; border-bottom:2px solid var(--accent-soft); border-radius:0;">
+        <div class="card-title">🎯 目标设定</div>
+        <label>目标开票总额</label>
+        <input id="target-input" type="number" placeholder="0.00" style="font-size: 34px; font-weight: 800; color:var(--primary); padding: 10px 0; background:none; border:none; border-bottom:2px solid rgba(0,113,227,0.1); border-radius:0;">
         
-        <div class="flex-grid" style="margin-top:25px;">
+        <div class="flex-grid" style="margin-top:30px;">
           <div><label>起始订单号</label><input id="filter-order-min" type="text" placeholder="290..."></div>
           <div><label>截止订单号</label><input id="filter-order-max" type="text" placeholder="不限"></div>
         </div>
 
         <div class="flex-grid">
-          <div><label>单笔下限</label><input id="min-single" type="number"></div>
-          <div><label>单笔上限</label><input id="max-single" type="number"></div>
+          <div><label>单笔最小值</label><input id="min-single" type="number"></div>
+          <div><label>单笔最大值</label><input id="max-single" type="number"></div>
         </div>
 
         <div class="flex-grid">
@@ -155,70 +178,71 @@
           <div><label>要求发票张数</label><input id="invoice-count" type="number"></div>
         </div>
 
-        <div style="display:flex; gap:30px; margin-top:10px;">
-          <label style="display:flex; align-items:center; cursor:pointer; text-transform:none;"><input type="checkbox" id="allow-approx" style="width:16px; height:16px; margin-right:8px;"> 允许误差匹配</label>
-          <label style="display:flex; align-items:center; cursor:pointer; text-transform:none;"><input type="checkbox" id="only-higher" style="width:16px; height:16px; margin-right:8px;"> 结果不得低于目标</label>
+        <div style="display:flex; gap:35px; margin-top:15px; padding: 5px;">
+          <label style="display:flex; align-items:center; cursor:pointer; text-transform:none; margin:0;"><input type="checkbox" id="allow-approx" style="width:18px; height:18px; margin-right:10px;"> 允许误差匹配</label>
+          <label style="display:flex; align-items:center; cursor:pointer; text-transform:none; margin:0;"><input type="checkbox" id="only-higher" style="width:18px; height:18px; margin-right:10px;"> 结果不得低于目标</label>
         </div>
       </div>
 
       <div class="card">
-        <label>库存概览仪表盘</label>
+        <div class="card-title">📊 库存概览仪表盘</div>
         <div id="inventory-stats"></div>
       </div>
 
       <div class="card">
-        <label>抬头管理</label>
-        <textarea id="company-header" rows="2" placeholder="输入名称和税号..."></textarea>
+        <div class="card-title">📑 抬头管理</div>
+        <textarea id="company-header" rows="2" placeholder="填写公司全称、税号等关键信息..."></textarea>
         <div id="header-history" class="history-chips"></div>
       </div>
     </div>
 
     <div class="column">
       <div class="card">
-        <label>删除与销账记录恢复</label>
-        <div id="record-list" class="record-list"></div>
+        <div class="card-title">🔄 销账恢复中心</div>
+        <div id="record-list" style="max-height: 520px; overflow-y: auto;"></div>
       </div>
 
       <div class="card">
-        <label>库存手动查询修正</label>
-        <div class="flex-row">
-          <input id="search-order-input" type="text" placeholder="输入订单号...">
-          <button id="btn-search-order" class="btn-island-ghost" style="color:var(--primary); background:var(--accent-soft); width:100px;">查询</button>
+        <div class="card-title">🛠 库存手动查询修正</div>
+        <input id="search-order-input" type="text" placeholder="键入订单号检索...">
+        <div class="search-btn-container">
+            <button id="btn-search-order" class="btn-search">立即查询</button>
         </div>
-        <div id="edit-result-area" style="margin-top:15px;"></div>
+        <div id="edit-result-area" style="margin-top:20px;"></div>
       </div>
 
       <div class="card">
-        <label>数据迁移方案</label>
-        <div class="flex-row">
-          <button id="backup-btn" class="btn-island-ghost" style="color:var(--text-sub); border:1px solid rgba(0,0,0,0.05); flex:1;">📤 备份数据</button>
-          <button id="restore-btn" class="btn-island-ghost" style="color:var(--text-sub); border:1px solid rgba(0,0,0,0.05); flex:1;">📥 导入恢复</button>
+        <div class="card-title">📦 数据迁移方案</div>
+        <div class="flex-grid" style="margin-bottom:0;">
+          <button id="backup-btn" class="btn-island-ghost" style="flex:1;">📤 备份数据</button>
+          <button id="restore-btn" class="btn-island-ghost" style="flex:1;">📥 恢复数据</button>
         </div>
-        <textarea id="backup-text" readonly style="margin-top:10px; font-size:10px; display:none; height:60px;"></textarea>
+        <textarea id="backup-text" readonly style="margin-top:15px; font-size:11px; display:none; height:80px;"></textarea>
         <input type="file" id="restore-input" style="display:none" accept=".json">
       </div>
     </div>
   </div>
 
-  <div class="card">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-      <label style="margin:0;">✨ 智能组合方案 (Output Result)</label>
-      <span style="font-size:10px; font-family:monospace; color:var(--text-sub);">ENCODING: UTF-8</span>
-    </div>
-    <div id="result-output">等待计算指令...</div>
+  <div class="card" style="margin-top:10px;">
+    <div class="card-title">✨ 智能组合输出 (OUTPUT)</div>
+    <div id="result-output">SYSTEM READY: 待命中...</div>
   </div>
 </div>
 
 <div class="island-footer">
+  <div class="status-bar">
+      <div class="status-dot"></div>
+      SYSTEM ONLINE
+  </div>
+  <div style="width:1px; height:24px; background:rgba(0,0,0,0.1); margin:0 10px;"></div>
   <button id="reset-btn" class="btn-island-ghost">🔄 重置缓存</button>
   <button id="copy-btn" class="btn-island-ghost">📋 复制结果</button>
-  <button id="confirm-delete-btn" class="hidden" style="background:#ff3b30; color:white; padding:10px 20px; border-radius:12px;">🗑 确认销账并扣库存</button>
-  <div style="width:1px; height:20px; background:rgba(255,255,255,0.2);"></div>
+  <button id="confirm-delete-btn" class="hidden" style="background:var(--danger); color:white; padding:12px 25px; border-radius:14px; font-weight:700;">🗑 确认销账</button>
   <button id="combine-btn" class="btn-island-main">✨ 执行智能计算</button>
 </div>
 
 <script>
-/* ====== 状态引擎（锁定 V9_2 数据 Key） ====== */
+// --- [数据核心：严格锁定 V9_2 逻辑] ---
 const DATA_SOURCE = [{"order":"29844392230","amount":1240},{"order":"29787668582","amount":670},{"order":"29779855398","amount":670},{"order":"29758217446","amount":208},{"order":"29758125414","amount":670},{"order":"29754938534","amount":189},{"order":"29754882022","amount":740},{"order":"29723444262","amount":1180},{"order":"29722082086","amount":1945},{"order":"29722808550","amount":972},{"order":"29722926822","amount":189},{"order":"29722933926","amount":590},{"order":"29722753254","amount":656},{"order":"29722673446","amount":1770},{"order":"29722664486","amount":189},{"order":"29722661094","amount":490},{"order":"29722722854","amount":590},{"order":"29722357286","amount":490},{"order":"29722422118","amount":490},{"order":"29722343654","amount":490},{"order":"29721815398","amount":590},{"order":"29722199910","amount":1470},{"order":"29722121958","amount":590},{"order":"29722146598","amount":189},{"order":"29722016806","amount":278},{"order":"29722015270","amount":590},{"order":"29722006502","amount":590},{"order":"29722009638","amount":189},{"order":"29721258726","amount":567},{"order":"29721364070","amount":1895},{"order":"29664786726","amount":1345},{"order":"29657407974","amount":960},{"order":"29657049766","amount":960},{"order":"29657089702","amount":1000},{"order":"29657268006","amount":1000},{"order":"29613864934","amount":990},{"order":"29613779238","amount":990},{"order":"29613146918","amount":1194},{"order":"29595224358","amount":1020},{"order":"29594630822","amount":1020},{"order":"29594980966","amount":1020},{"order":"29595121894","amount":1020},{"order":"29595097062","amount":1020},{"order":"29595222822","amount":1020},{"order":"29584577446","amount":1020},{"order":"29585686374","amount":1020},{"order":"29579912422","amount":990},{"order":"29613146918","amount":1194},{"order":"29595224358","amount":1020},{"order":"29594630822","amount":1020},{"order":"29594980966","amount":1020},{"order":"29595121894","amount":1020},{"order":"29595097062","amount":1020},{"order":"29595222822","amount":1020},{"order":"29584577446","amount":1020},{"order":"29585686374","amount":1020},{"order":"29579912422","amount":990},{"order":"29579148454","amount":990},{"order":"29578714086","amount":159},{"order":"29578467110","amount":990},{"order":"29578353894","amount":990},{"order":"29578045286","amount":1020},{"order":"29578181862","amount":1020},{"order":"29578056486","amount":2040},{"order":"29577984294","amount":2040},{"order":"29521294630","amount":1050},{"order":"29521271270","amount":1050},{"order":"29511656678","amount":1050},{"order":"29511582438","amount":1050},{"order":"29503897638","amount":1020},{"order":"29503915686","amount":1020},{"order":"29503479526","amount":1050},{"order":"29503480294","amount":1050},{"order":"29499944230","amount":1000},{"order":"29499944294","amount":1000},{"order":"29498897254","amount":1050},{"order":"29498897702","amount":1050},{"order":"29490917478","amount":1050},{"order":"29490868710","amount":1050},{"order":"29488269734","amount":1000},{"order":"29488521894","amount":1000},{"order":"29488129766","amount":1000},{"order":"29488684390","amount":1000},{"order":"29487024294","amount":1050},{"order":"29487043942","amount":1050},{"order":"29487038182","amount":1050},{"order":"29487022822","amount":1050},{"order":"29475651046","amount":1050},{"order":"29475572838","amount":1050},{"order":"29472654886","amount":1050},{"order":"29472546022","amount":1050},{"order":"29376457638","amount":1050},{"order":"29376618790","amount":1050},{"order":"29372705702","amount":1050},{"order":"29372746918","amount":1050},{"order":"29324981734","amount":1050},{"order":"29325052966","amount":1050},{"order":"29324565990","amount":1050},{"order":"29324610982","amount":1050},{"order":"29324176358","amount":1050},{"order":"29324204646","amount":1050},{"order":"29322718182","amount":2100},{"order":"29322723302","amount":2100},{"order":"29321161126","amount":2100},{"order":"29321200934","amount":2100},{"order":"29320710246","amount":3150},{"order":"29320689446","amount":5250},{"order":"29320422758","amount":1050},{"order":"29320229798","amount":2100},{"order":"29320212582","amount":2100},{"order":"29320259878","amount":5250},{"order":"29320237030","amount":1050},{"order":"29320311014","amount":5250},{"order":"29313551014","amount":2100},{"order":"29313528934","amount":5250},{"order":"29313330278","amount":5250},{"order":"29309418406","amount":5250},{"order":"29250020006","amount":1050},{"order":"29250000166","amount":4200},{"order":"29250087014","amount":5250},{"order":"29250059750","amount":1050},{"order":"29250018150","amount":3150},{"order":"29249976614","amount":4200},{"order":"29249801830","amount":5250},{"order":"29240651238","amount":5250},{"order":"29203828262","amount":3150},{"order":"29195981798","amount":1050},{"order":"29195932070","amount":1050},{"order":"29195980582","amount":1050},{"order":"29195981286","amount":1050},{"order":"29195705894","amount":2100},{"order":"29195678438","amount":2100},{"order":"29195667686","amount":1050},{"order":"29195761510","amount":1050},{"order":"29195733798","amount":1050},{"order":"29195721766","amount":1050},{"order":"29195728550","amount":1050},{"order":"29195559462","amount":1050},{"order":"29195615078","amount":1050},{"order":"29195500582","amount":1050},{"order":"29192155750","amount":2100},{"order":"29192157670","amount":2100},{"order":"29187893094","amount":1050},{"order":"29187884390","amount":1050},{"order":"29187450918","amount":1050},{"order":"29187453030","amount":1050},{"order":"29187413158","amount":1050},{"order":"29187431462","amount":1050},{"order":"29186986278","amount":1050},{"order":"29186994662","amount":1050},{"order":"29186704166","amount":1050},{"order":"29186524646","amount":5250},{"order":"29186336294","amount":3150},{"order":"29186354726","amount":3150},{"order":"29175575462","amount":1020},{"order":"29175636582","amount":1020},{"order":"29156266534","amount":3060},{"order":"29156274086","amount":3060},{"order":"29156045670","amount":1020},{"order":"29156085414","amount":1020},{"order":"29155498086","amount":2040},{"order":"29155589734","amount":2040},{"order":"29106863398","amount":229},{"order":"29085307238","amount":169},{"order":"29084841830","amount":845},{"order":"29046598438","amount":398},{"order":"29046424358","amount":597},{"order":"29041101926","amount":398},{"order":"29039226086","amount":995},{"order":"29039009830","amount":1393},{"order":"29038401830","amount":796},{"order":"29018396326","amount":796},{"order":"29008596838","amount":199},{"order":"29007762982","amount":5150},{"order":"29003278694","amount":209},{"order":"28964953318","amount":1010},{"order":"28965073958","amount":1010},{"order":"28957860134","amount":1010},{"order":"28957880934","amount":1010},{"order":"28945928166","amount":1010},{"order":"28945876774","amount":1010},{"order":"28941124646","amount":1010},{"order":"28941227494","amount":1010},{"order":"28940363750","amount":1010},{"order":"28940510694","amount":1010},{"order":"28940484134","amount":1010},{"order":"28940484582","amount":1010},{"order":"28940030374","amount":1010},{"order":"28940030374","amount":1010},{"order":"28939941734","amount":1010},{"order":"28939594534","amount":1010},{"order":"28939622054","amount":1010},{"order":"28934446950","amount":1010},{"order":"28934754086","amount":980},{"order":"28922217446","amount":1010},{"order":"28917119142","amount":1010},{"order":"28917546406","amount":1010},{"order":"28916902502","amount":980},{"order":"28916850278","amount":980},{"order":"28915493094","amount":1010},{"order":"28915621542","amount":1010},{"order":"28902560550","amount":980},{"order":"28902630502","amount":980},{"order":"28901966694","amount":980},{"order":"28901861734","amount":980},{"order":"28900709542","amount":980},{"order":"28900711270","amount":980},{"order":"28609574630","amount":1030},{"order":"28510891814","amount":450},{"order":"28510953062","amount":360},{"order":"28192753958","amount":970},{"order":"28192706790","amount":970},{"order":"28191451238","amount":1940},{"order":"28185388710","amount":3000},{"order":"28016488742","amount":990},{"order":"27989546470","amount":990},{"order":"27989054310","amount":990},{"order":"27989195302","amount":960},{"order":"27498602150","amount":2970},{"order":"27498949542","amount":2880},{"order":"27499031206","amount":4950},{"order":"27499056870","amount":4800},{"order":"27497737574","amount":4950},{"order":"27494179878","amount":990},{"order":"27493949158","amount":960},{"order":"27494024038","amount":990},{"order":"27493984614","amount":960},{"order":"27494228902","amount":990},{"order":"27494335398","amount":960},{"order":"27494049126","amount":3840},{"order":"27494017958","amount":3840},{"order":"27493623782","amount":960},{"order":"27493594598","amount":960},{"order":"27493467814","amount":960},{"order":"27493556646","amount":960},{"order":"27493456870","amount":1920},{"order":"27492798118","amount":960},{"order":"27493151398","amount":960},{"order":"27492642150","amount":960},{"order":"27472629286","amount":960},{"order":"27473140390","amount":990},{"order":"27472936230","amount":2970},{"order":"27472964774","amount":990},{"order":"27462561958","amount":2970},{"order":"27460235046","amount":990},{"order":"27460354918","amount":960},{"order":"27460337702","amount":2970},{"order":"27309417766","amount":1020},{"order":"27309158246","amount":1020},{"order":"27309054566","amount":1020},{"order":"27307771942","amount":1020},{"order":"27306899942","amount":2040},{"order":"27266581350","amount":3060},{"order":"27249636582","amount":5100},{"order":"27239209510","amount":5150},{"order":"27232575782","amount":4120},{"order":"27232240614","amount":2020},{"order":"27231980262","amount":5050},{"order":"27232397414","amount":5050},{"order":"27231769062","amount":3480},{"order":"27231626022","amount":4120},{"order":"27224537510","amount":1010},{"order":"27136238886","amount":1050},{"order":"27136276518","amount":1050},{"order":"27134868582","amount":1050},{"order":"27134126886","amount":3150},{"order":"26790683558","amount":1040},{"order":"26693575462","amount":5050},{"order":"26388819174","amount":4160},{"order":"26373999526","amount":5200},{"order":"26211479910","amount":2060}];
 
 let inventory = [];
@@ -259,11 +283,11 @@ function renderStats() {
     const max = inventory.reduce((m, p) => (p.amount > m ? p.amount : m), inventory[0].amount);
 
     el.innerHTML = `
-      <div class="stats-row">
+      <div class="stat-row">
         <div class="stat-box"><b>${total.toLocaleString()}</b><span>库存总金额</span></div>
         <div class="stat-box"><b>${count}</b><span>可用单据</span></div>
       </div>
-      <p style="text-align:center; font-size:11px; margin-top:12px; color:var(--text-sub); font-weight:600;">金额区间：${min.toLocaleString()} ~ ${max.toLocaleString()} 元</p>`;
+      <p style="text-align:center; font-size:12px; margin-top:15px; color:var(--text-sub); font-weight:600; opacity:0.8;">金额动态区间：${min.toLocaleString()} ~ ${max.toLocaleString()} 元</p>`;
 }
 
 async function loadInventory(forceReset = false) {
@@ -280,30 +304,37 @@ function renderHeaderHistory() {
   const div = document.getElementById('header-history'); div.innerHTML = '';
   loadHeaderHistory().forEach((h, i) => {
     const chip = document.createElement('div'); chip.className = 'chip';
-    chip.innerHTML = `${h} <span style="margin-left:5px; color:#ccc;">✕</span>`;
+    chip.innerHTML = `<span>${h}</span> <b style="margin-left:8px; color:#ccc;">✕</b>`;
     chip.onclick = () => document.getElementById('company-header').value = h;
+    chip.querySelector('b').onclick = (e) => { 
+        e.stopPropagation();
+        const a = loadHeaderHistory(); a.splice(i, 1); 
+        localStorage.setItem('headerHistory_V9_2', JSON.stringify(a)); 
+        renderHeaderHistory(); 
+    };
     div.appendChild(chip);
   });
 }
 
 function renderDeleteRecords() {
   const list = document.getElementById('record-list'); list.innerHTML = '';
-  if (deleteRecords.length === 0) { list.innerHTML = '<div style="color:#999; text-align:center; padding:20px;">空</div>'; return; }
+  if (deleteRecords.length === 0) { list.innerHTML = '<div style="color:#999; text-align:center; padding:30px; font-size:14px;">( 无历史销账记录 )</div>'; return; }
   deleteRecords.slice(0, 20).forEach((batch, batchIdx) => {
     const total = batch.reduce((s, inv) => s + inv.sum, 0);
     const item = document.createElement('div'); item.className = 'record-item';
-    let html = `<div style="display:flex; justify-content:space-between; margin-bottom:12px;"><b style="font-size:15px;">批次 ${batchIdx + 1}</b> <span style="font-weight:700; color:var(--primary);">${total.toLocaleString()}元</span></div>`;
+    let html = `<div style="display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid rgba(0,0,0,0.04); padding-bottom:10px;"><b style="font-size:16px;">批次 ${batchIdx + 1}</b> <span style="font-weight:800; color:var(--primary); font-size:16px;">${total.toLocaleString()} 元</span></div>`;
     batch.forEach((inv, invIdx) => {
         inv.orders.forEach((o, orderIdx) => {
-           html += `<div class="order-line"><span>${o.order} <b>(${o.amount})</b></span><button class="btn-recover" onclick="recoverSingleOrder(${batchIdx}, ${invIdx}, ${orderIdx})">恢复</button></div>`;
+           // 优化3：改用 xxx 元展现，去掉括号
+           html += `<div class="order-line"><span>${o.order} <b>${o.amount} 元</b></span><button class="btn-recover" onclick="recoverSingleOrder(${batchIdx}, ${invIdx}, ${orderIdx})">恢复单条</button></div>`;
         });
     });
-    html += `<button class="btn-batch" onclick="recoverBatch(${batchIdx})">撤回整批</button>`;
+    html += `<button class="btn-batch" onclick="recoverBatch(${batchIdx})">↺ 撤回整批销账记录</button>`;
     item.innerHTML = html; list.appendChild(item);
   });
 }
 
-/* ====== 算法核心（绝对不动的原版逻辑） ====== */
+/* ====== 算法核心 ====== */
 function shuffleArray(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
 function selectOrdersByDP(target, maxSingle, allowApprox, onlyHigher, minOrderStr, maxOrderStr, usePool) {
@@ -404,7 +435,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(async () => {
         let attempt = 0, success = null;
         while (attempt < 2000) {
-            attempt++; retryTxt.textContent = `ITERATION: ${attempt} / 2000`;
+            attempt++; retryTxt.textContent = `ATTEMPT: ${attempt} / 2000`;
             let pool = inventory.slice(); if (attempt > 1) shuffleArray(pool);
             const pick = selectOrdersByDP(tgt, maxS, document.getElementById('allow-approx').checked, document.getElementById('only-higher').checked, document.getElementById('filter-order-min').value, document.getElementById('filter-order-max').value, pool);
             if (pick) {
@@ -414,10 +445,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (attempt % 100 === 0) await new Promise(r => setTimeout(r, 0));
         }
         loadEl.style.display = 'none';
-        if (!success) outEl.textContent = 'SYSTEM ERROR: NO VALID PATH FOUND';
+        if (!success) outEl.textContent = 'SYSTEM INFO: 未找到有效匹配路径。建议放宽单张金额或开启误差匹配。';
         else {
             const out = []; success.forEach((inv, i) => {
-                out.push(`发票 [${i + 1}]  |  金额: ${inv.sum.toLocaleString()} 元`); inv.orders.forEach(o => out.push(`   ┕ 订单: ${o.order} (${o.amount}元)`)); out.push('');
+                out.push(`发票 [${i + 1}]  |  金额: ${inv.sum.toLocaleString()} 元`); inv.orders.forEach(o => out.push(`   ┕ 订单: ${o.order} ( ${o.amount} 元 )`)); out.push('');
             });
             if (header) out.push(header, '');
             out.push('不需要备注', '568881753@qq.com');
@@ -436,11 +467,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('copy-btn').onclick = () => {
       navigator.clipboard.writeText(document.getElementById('result-output').textContent);
-      alert('已复制到系统剪贴板');
+      alert('SUCCESS: 结果已复制');
   };
 
   document.getElementById('reset-btn').onclick = async () => {
-      if (confirm('是否重置库存到默认状态？销账记录将清空。')) {
+      if (confirm('警告：此操作将清空所有手动修正和销账历史，重置库存到默认状态。确认？')) {
           await loadInventory(true); renderDeleteRecords();
       }
   };
@@ -448,7 +479,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('backup-btn').onclick = () => {
     const data = { inventory: localStorage.getItem('invoiceInventory_V9_2'), deleteRecords: localStorage.getItem('deleteRecords_V9_2'), headerHistory: localStorage.getItem('headerHistory_V9_2') };
     const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `InvoiceData.json`; a.click();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Invoice_Intelligence_Backup.json`; a.click();
     document.getElementById('backup-text').value = JSON.stringify(data); document.getElementById('backup-text').style.display = 'block';
   };
 
@@ -461,7 +492,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           localStorage.setItem('deleteRecords_V9_2', data.deleteRecords);
           localStorage.setItem('headerHistory_V9_2', data.headerHistory);
           location.reload();
-      } catch(e) { alert('ERROR: INVALID FILE'); }
+      } catch(e) { alert('CRITICAL ERROR: 文件解析失败'); }
     };
     reader.readAsText(e.target.files[0]);
   };
@@ -470,14 +501,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       const val = document.getElementById('search-order-input').value.trim();
       const resArea = document.getElementById('edit-result-area');
       resArea.innerHTML = '';
+      if(!val) return;
       const found = inventory.filter(o => o.order.includes(val));
       found.forEach(item => {
-          const d = document.createElement('div'); d.className='flex-row'; d.style.marginBottom='10px';
-          d.innerHTML = `<span style="font-size:13px; flex:2;">${item.order}</span><input type="number" value="${item.amount}" style="flex:1; padding:6px; font-size:13px;">`;
-          const btn = document.createElement('button'); btn.textContent='SAVE'; btn.className='btn-recover'; btn.style.padding='6px 12px';
+          const d = document.createElement('div'); d.className='flex-grid'; d.style.alignItems='center';
+          d.innerHTML = `<span style="font-size:14px; flex:2; font-weight:600;">${item.order}</span><input type="number" value="${item.amount}" style="flex:1; padding:8px; font-size:14px;">`;
+          const btn = document.createElement('button'); btn.textContent='保存修正'; btn.className='btn-recover'; btn.style.marginLeft='15px';
           btn.onclick = () => {
               item.amount = Number(d.querySelector('input').value);
-              saveInventory(); alert('DONE');
+              saveInventory(); alert('已完成数据修正');
           };
           d.appendChild(btn); resArea.appendChild(d);
       });
