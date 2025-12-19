@@ -2,18 +2,12 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票组合计算器 (V10.0 UI焕新版)</title>
+  <title>发票组合计算器 (V10.1 数据修复版)</title>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <script>
-    window.onerror = function(msg, url, line) {
-      alert('【程序报错】\n' + msg + '\n行号：' + line + '\n请截图反馈。');
-    };
-  </script>
   <style>
     :root {
-      --primary: #007aff; /* iOS Blue */
-      --primary-hover: #0062cc;
-      --bg-color: #f2f2f7; /* iOS System Gray 6 */
+      --primary: #007aff;
+      --bg-color: #f2f2f7;
       --card-bg: #ffffff;
       --text-main: #1c1c1e;
       --text-sub: #8e8e93;
@@ -24,352 +18,94 @@
       --success: #34c759;
       --warning: #ffcc00;
     }
-
     * { box-sizing: border-box; margin: 0; padding: 0; outline: none; -webkit-tap-highlight-color: transparent; }
-    
-    body {
-      background: var(--bg-color);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      color: var(--text-main);
-      padding-bottom: 280px; /* 留出底部操作区 */
-      line-height: 1.5;
-    }
-
-    .container {
-      max-width: 520px;
-      margin: 0 auto;
-      padding: 20px 16px;
-    }
-
-    h2 {
-      text-align: center;
-      margin-bottom: 20px;
-      font-size: 1.4rem;
-      font-weight: 700;
-      color: var(--text-main);
-      letter-spacing: -0.5px;
-    }
-
-    /* 卡片通用样式 */
-    .card {
-      background: var(--card-bg);
-      border-radius: var(--border-radius);
-      padding: 20px;
-      margin-bottom: 16px;
-      box-shadow: var(--shadow);
-      border: 1px solid rgba(0,0,0,0.02);
-    }
-
-    label {
-      display: block;
-      margin-top: 16px;
-      font-size: 0.9rem;
-      font-weight: 600;
-      color: #3a3a3c;
-      margin-bottom: 6px;
-    }
-    label:first-child { margin-top: 0; }
+    body { background: var(--bg-color); font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: var(--text-main); padding-bottom: 280px; }
+    .container { max-width: 520px; margin: 0 auto; padding: 20px 16px; }
+    h2 { text-align: center; margin-bottom: 20px; font-size: 1.4rem; font-weight: 700; }
+    .card { background: var(--card-bg); border-radius: var(--border-radius); padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow); }
+    label { display: block; margin-top: 16px; font-size: 0.9rem; font-weight: 600; margin-bottom: 6px; }
     .highlight-label { color: var(--primary); }
-
-    /* 输入框优化 */
-    input, textarea {
-      width: 100%;
-      padding: 12px;
-      font-size: 1rem;
-      border: 1px solid #d1d1d6;
-      border-radius: 8px;
-      background: #fcfcfc;
-      transition: all 0.2s ease;
-      font-family: inherit;
-    }
-    input:focus, textarea:focus {
-      border-color: var(--primary);
-      background: #fff;
-      box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
-    }
-    textarea { resize: vertical; min-height: 80px; }
-
+    input, textarea { width: 100%; padding: 12px; font-size: 1rem; border: 1px solid #d1d1d6; border-radius: 8px; background: #fcfcfc; }
     .flex { display: flex; gap: 10px; align-items: center; }
     .flex input { flex: 1; text-align: center; }
-    .flex span { color: var(--text-sub); font-weight: bold; }
-
     .two-cols { display: flex; gap: 12px; margin-top: 10px; }
     .two-cols > div { flex: 1; }
-
-    /* Checkbox 优化 */
-    .checkbox-group {
-      display: flex;
-      gap: 15px;
-      margin-top: 16px;
-      background: #f9f9f9;
-      padding: 12px;
-      border-radius: 8px;
-    }
-    .checkbox-item {
-      display: flex;
-      align-items: center;
-      font-size: 0.9rem;
-      color: #555;
-      cursor: pointer;
-    }
-    .checkbox-item input { width: auto; margin-right: 6px; transform: scale(1.2); }
-
-    /* 抬头历史 */
+    .checkbox-group { display: flex; gap: 15px; margin-top: 16px; background: #f9f9f9; padding: 12px; border-radius: 8px; }
+    .checkbox-item { display: flex; align-items: center; font-size: 0.9rem; }
     #header-history { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
-    .hdr-item {
-      background: #f2f2f7;
-      color: var(--primary);
-      border-radius: 6px;
-      display: flex;
-      align-items: center;
-      overflow: hidden;
-      font-size: 0.85rem;
-      border: 1px solid rgba(0,0,0,0.05);
-    }
-    .hdr-item button.txt { background: transparent; border: none; padding: 6px 10px; color: inherit; font-weight: 500; }
-    .hdr-item button.del { background: rgba(0,0,0,0.05); border: none; padding: 6px 8px; color: #999; }
-    
-    /* V10.0 库存仪表盘 */
-    .inventory-stats-box {
-      background: linear-gradient(135deg, #e3f2fd 0%, #f0f7ff 100%);
-      color: #004085;
-      padding: 15px;
-      border-radius: var(--border-radius);
-      margin-top: 20px;
-      border: 1px solid #b8daff;
-      position: relative;
-      overflow: hidden;
-    }
-    .inventory-stats-box::before {
-      content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--primary);
-    }
+    .hdr-item { background: #f2f2f7; color: var(--primary); border-radius: 6px; display: flex; overflow: hidden; font-size: 0.85rem; }
+    .hdr-item button { background: transparent; border: none; padding: 6px 10px; }
+    .inventory-stats-box { background: linear-gradient(135deg, #e3f2fd 0%, #f0f7ff 100%); padding: 15px; border-radius: var(--border-radius); margin-top: 20px; border: 1px solid #b8daff; }
     .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 5px; }
     .stat-item { background: rgba(255,255,255,0.6); padding: 8px; border-radius: 6px; text-align: center; }
     .stat-val { font-size: 1.1rem; font-weight: 800; color: var(--primary); display: block; }
-    .stat-label { font-size: 0.75rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
-    .stat-range { grid-column: 1 / -1; text-align: center; font-size: 0.85rem; color: #555; margin-top: 4px; background: rgba(255,255,255,0.4); padding: 4px; border-radius: 4px;}
-
-    /* 折叠面板 */
-    .accordion { border-radius: var(--border-radius); overflow: hidden; margin-top: 12px; box-shadow: var(--shadow); background: #fff; }
-    .accordion-header {
-      padding: 14px 20px;
-      cursor: pointer;
-      font-weight: 600;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: #fff;
-      border-bottom: 1px solid #f0f0f0;
-      transition: background 0.2s;
-    }
-    .accordion-header:active { background: #f9f9f9; }
-    .accordion-header .arrow {
-      width: 8px; height: 8px;
-      border-right: 2px solid #ccc; border-bottom: 2px solid #ccc;
-      transform: rotate(45deg); transition: transform 0.3s;
-    }
-    .accordion-header.open .arrow { transform: rotate(-135deg); border-color: var(--primary); }
+    .stat-label { font-size: 0.75rem; color: #666; }
+    .accordion { border-radius: var(--border-radius); overflow: hidden; margin-top: 12px; background: #fff; box-shadow: var(--shadow); }
+    .accordion-header { padding: 14px 20px; cursor: pointer; font-weight: 600; display: flex; justify-content: space-between; background: #fff; border-bottom: 1px solid #f0f0f0; }
     .accordion-content { display: none; padding: 16px 20px; background: #fafafa; }
-    
-    /* 结果区域 */
-    #result-output {
-      font-family: "SF Mono", "Menlo", "Monaco", "Courier New", monospace;
-      font-size: 0.9rem;
-      white-space: pre-wrap;
-      color: #333;
-      background: #f8f9fa;
-      padding: 12px;
-      border-radius: 8px;
-      border: 1px solid #eee;
-      max-height: 300px;
-      overflow-y: auto;
-    }
-
-    /* 底部固定操作栏 */
-    .footer {
-      position: fixed; left: 0; right: 0; bottom: 0;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
-      padding: 12px 16px 30px 16px; /* 适配 iPhone X 底部 */
-      display: flex; gap: 10px; flex-wrap: wrap; z-index: 100;
-      border-top: 1px solid rgba(0,0,0,0.05);
-    }
-    .footer button {
-      border: none;
-      border-radius: var(--btn-radius);
-      cursor: pointer;
-      font-weight: 600;
-      transition: transform 0.1s, opacity 0.2s;
-    }
-    .footer button:active { transform: scale(0.98); opacity: 0.9; }
-    
+    #result-output { font-family: monospace; font-size: 0.9rem; white-space: pre-wrap; background: #f8f9fa; padding: 12px; border-radius: 8px; max-height: 300px; overflow-y: auto; }
+    .footer { position: fixed; left: 0; right: 0; bottom: 0; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 12px 16px 30px 16px; display: flex; gap: 10px; flex-wrap: wrap; z-index: 100; border-top: 1px solid rgba(0,0,0,0.05); }
+    .footer button { border: none; border-radius: var(--btn-radius); font-weight: 600; }
     .btn-full { flex: 1 1 100%; padding: 14px 0; font-size: 1.1rem; }
     .btn-half { flex: 1 1 calc(50% - 5px); padding: 12px 0; font-size: 0.95rem; }
-
-    .primary { background: var(--primary); color: #fff; box-shadow: 0 4px 10px rgba(0, 122, 255, 0.3); }
+    .primary { background: var(--primary); color: #fff; }
     .secondary { background: #e5e5ea; color: #333; }
     .danger { background: var(--danger); color: #fff; }
     .success { background: var(--success); color: #fff; }
     .warning { background: var(--warning); color: #000; }
-
-    .hidden { display: none !important; }
-    .tip { font-size: 0.85rem; color: var(--text-sub); line-height: 1.4; }
-
-    /* Loading */
-    #loading-overlay {
-      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(255,255,255,0.92);
-      backdrop-filter: blur(4px);
-      z-index: 999;
-      display: none;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
-    .spinner {
-      width: 44px; height: 44px;
-      border: 4px solid #e5e5e5;
-      border-top: 4px solid var(--primary);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      margin-bottom: 15px;
-    }
+    #loading-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.92); z-index: 999; display: none; flex-direction: column; align-items: center; justify-content: center; }
+    .spinner { width: 44px; height: 44px; border: 4px solid #e5e5e5; border-top: 4px solid var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg) } 100% { transform: rotate(360deg) } }
-
-    /* 备份文本框 */
-    #backup-area { display: none; margin-top: 10px; }
-    #backup-text { font-size: 0.75rem; color: #555; background: #fff; }
-    
-    /* 修正删除/修正列表 */
     .record-item { border-top: 1px dashed #eee; padding: 12px 0; }
-    .record-item:first-child { border-top: none; }
-    .record-title { font-weight: 700; color: #333; margin-bottom: 8px; font-size: 0.95rem; }
-    .single-order-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.9rem; color: #555; }
-    .btn-recover-one { font-size: 0.75rem; padding: 4px 10px; background: #e3f2fd; color: var(--primary); border-radius: 12px; border:none; }
-    .btn-recover-batch { width: 100%; margin-top: 10px; padding: 8px; background: #f0f0f5; color: #555; border-radius: 8px; border:none; font-weight: 500;}
-    
-    .edit-row { display: flex; gap: 8px; align-items: center; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
-    .edit-row input { width: 80px; padding: 6px; }
-    .btn-update { padding: 6px 12px; background: var(--success); color: white; border: none; border-radius: 6px; font-size: 0.85rem;}
+    .single-order-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.9rem; }
+    .btn-recover-one { font-size: 0.75rem; padding: 2px 8px; background: #e3f2fd; color: var(--primary); border-radius: 10px; border:none; }
   </style>
 </head>
 <body>
-
-  <div id="loading-overlay">
-    <div class="spinner"></div>
-    <div id="loading-text" style="font-weight:600; color:#333; font-size:1.1rem;">正在智能组合...</div>
-    <div id="retry-count" style="color:#888; margin-top:8px; font-size:0.9rem; font-variant-numeric: tabular-nums;">0 / 2000</div>
-  </div>
-
+  <div id="loading-overlay"><div class="spinner"></div><div id="loading-text" style="margin-top:15px; font-weight:600;">正在计算...</div><div id="retry-count">0 / 2000</div></div>
   <div class="container">
     <h2>🧾 发票组合计算器</h2>
-
     <div class="card">
       <label class="highlight-label">🎯 目标开票金额</label>
-      <input id="target-input" type="number" placeholder="请输入总金额，如 20000" style="font-size:1.2rem; font-weight:bold; color:var(--primary);">
-
+      <input id="target-input" type="number" placeholder="请输入总金额">
       <label>🔍 订单号范围筛选</label>
-      <div class="flex">
-        <input id="filter-order-min" type="text" placeholder="起始号">
-        <span>—</span>
-        <input id="filter-order-max" type="text" placeholder="结束号">
-      </div>
-
+      <div class="flex"><input id="filter-order-min" type="text" placeholder="起始号"><input id="filter-order-max" type="text" placeholder="结束号"></div>
       <label>💰 单张发票金额限制</label>
-      <div class="flex">
-        <input id="min-single" type="number" placeholder="最小金额">
-        <span>—</span>
-        <input id="max-single" type="number" placeholder="最大金额">
-      </div>
-
+      <div class="flex"><input id="min-single" type="number" placeholder="最小"><input id="max-single" type="number" placeholder="最大"></div>
       <div class="two-cols">
-        <div>
-          <label>🔢 同额张数上限</label>
-          <input id="max-same-count" type="number" placeholder="默认不限">
-        </div>
-        <div>
-          <label>📄 固定张数</label>
-          <input id="invoice-count" type="number" placeholder="默认不限">
-        </div>
+        <div><label>🔢 同额上限</label><input id="max-same-count" type="number"></div>
+        <div><label>📄 固定张数</label><input id="invoice-count" type="number"></div>
       </div>
-
       <div class="checkbox-group">
-        <label class="checkbox-item">
-          <input type="checkbox" id="allow-approx"> 允许误差最小匹配
-        </label>
-        <label class="checkbox-item">
-          <input type="checkbox" id="only-higher"> 不得小于目标
-        </label>
+        <label class="checkbox-item"><input type="checkbox" id="allow-approx"> 允许误差匹配</label>
+        <label class="checkbox-item"><input type="checkbox" id="only-higher"> 不得小于目标</label>
       </div>
-
       <label>🏢 公司抬头</label>
-      <textarea id="company-header" rows="2" placeholder="行1：公司名称&#10;行2：税号"></textarea>
+      <textarea id="company-header" rows="2"></textarea>
       <div id="header-history"></div>
-
-      <div id="inventory-stats" class="inventory-stats-box">
-          <div style="text-align:center; color:#999;">正在加载库存数据...</div>
+      <div id="inventory-stats" class="inventory-stats-box">正在加载...</div>
+    </div>
+    <div class="accordion">
+      <div class="accordion-header" id="backup-acc-header"><span>📦 数据迁移 (备份/恢复)</span><div class="arrow"></div></div>
+      <div class="accordion-content" id="backup-acc-content">
+        <div class="two-cols"><button id="backup-btn" class="success">备份数据</button><button id="restore-btn" class="warning">恢复数据</button></div>
+        <textarea id="backup-text" readonly style="margin-top:10px; font-size:0.7rem; display:none;"></textarea>
+        <input type="file" id="restore-input" style="display:none" accept=".json">
       </div>
     </div>
-
     <div class="accordion">
-        <div class="accordion-header" id="backup-acc-header" style="color:#b58900;">
-          <span>📦 数据迁移 (备份/恢复)</span>
-          <div class="arrow"></div>
-        </div>
-        <div class="accordion-content" id="backup-acc-content">
-          <div class="tip">在旧设备点“备份”复制乱码，在新设备点“恢复”粘贴或导入文件。</div>
-          <div class="two-cols" style="margin-top:12px;">
-              <button id="backup-btn" class="success" style="padding:10px; border-radius:8px; border:none; width:100%;">📤 备份数据</button>
-              <button id="restore-btn" class="warning" style="padding:10px; border-radius:8px; border:none; width:100%;">📥 恢复数据</button>
-          </div>
-          <div id="backup-area">
-              <label>备份码（复制/粘贴此处）：</label>
-              <textarea id="backup-text" readonly onclick="this.select()"></textarea>
-          </div>
-          <input type="file" id="restore-input" style="display:none" accept=".json">
-        </div>
-    </div>
-
-    <div class="accordion">
-      <div class="accordion-header" id="edit-acc-header">
-        <span>🛠 库存修正 / 查询</span>
-        <div class="arrow"></div>
-      </div>
+      <div class="accordion-header" id="edit-acc-header"><span>🛠 库存修正 / 查询</span><div class="arrow"></div></div>
       <div class="accordion-content" id="edit-acc-content">
-        <div class="search-box flex">
-            <input id="search-order-input" type="text" placeholder="输入订单号查询">
-            <button id="btn-search-order" class="primary" style="width:80px; padding:0; border-radius:8px;">查询</button>
-        </div>
+        <div class="flex"><input id="search-order-input" type="text"><button id="btn-search-order" class="primary" style="width:80px;">查询</button></div>
         <div id="edit-result-area" style="margin-top:10px"></div>
       </div>
     </div>
-
-    <div class="card">
-      <h3 style="font-size:1rem; margin-bottom:10px;">📤 组合结果</h3>
-      <div id="result-output" placeholder="点击“一键组合”后在此显示结果"></div>
-    </div>
-
+    <div class="card"><h3>组合结果</h3><div id="result-output"></div></div>
     <div class="accordion">
-      <div class="accordion-header" id="del-acc-header">
-        <span>🗑 删除/恢复记录</span>
-        <div class="arrow"></div>
-      </div>
-      <div class="accordion-content" id="record-list" style="display:none;"></div>
-    </div>
-
-    <div class="accordion" style="margin-bottom: 20px;">
-      <div class="accordion-header" id="debug-acc-header">
-        <span>🐞 调试日志</span>
-        <div class="arrow"></div>
-      </div>
-      <div class="accordion-content" id="debug-acc-content" style="display:none;">
-        <div id="debug-log"></div>
-      </div>
+      <div class="accordion-header" id="del-acc-header"><span>🗑 删除记录</span><div class="arrow"></div></div>
+      <div class="accordion-content" id="record-list"></div>
     </div>
   </div>
-
   <div class="footer">
     <button id="combine-btn" class="primary btn-full">✨ 一键智能组合</button>
     <button id="copy-btn" class="secondary btn-half">📋 复制结果</button>
@@ -378,25 +114,24 @@
   </div>
 
 <script>
-// --- 数据源 (内置) ---
-const DATA_SOURCE = [
-{"order":"29844392230","amount":1240},{"order":"29787668582","amount":670},{"order":"29779855398","amount":670},{"order":"29758217446","amount":208},{"order":"29758125414","amount":670},{"order":"29754938534","amount":189},{"order":"29754882022","amount":740},{"order":"29723444262","amount":1180},{"order":"29722926822","amount":189},{"order":"29722933926","amount":590},{"order":"29722673446","amount":1770},{"order":"29722664486","amount":189},{"order":"29722661094","amount":490},{"order":"29722722854","amount":590},{"order":"29722357286","amount":490},{"order":"29722422118","amount":490},{"order":"29722343654","amount":490},{"order":"29721815398","amount":590},{"order":"29722199910","amount":1470},{"order":"29722121958","amount":590},{"order":"29722146598","amount":189},{"order":"29722006502","amount":590},{"order":"29722009638","amount":189},{"order":"29664786726","amount":1345},{"order":"29657407974","amount":960},{"order":"29657049766","amount":960},{"order":"29657089702","amount":1000},{"order":"29657268006","amount":1000},{"order":"29613864934","amount":990},{"order":"29613779238","amount":990},{"order":"29613146918","amount":1194},{"order":"29595224358","amount":1020},{"order":"29594630822","amount":1020},{"order":"29594980966","amount":1020},{"order":"29595121894","amount":1020},{"order":"29595097062","amount":1020},{"order":"29595222822","amount":1020},{"order":"29584577446","amount":1020},{"order":"29585686374","amount":1020},{"order":"29579912422","amount":990},{"order":"29613146918","amount":1194},{"order":"29595224358","amount":1020},{"order":"29594630822","amount":1020},{"order":"29594980966","amount":1020},{"order":"29595121894","amount":1020},{"order":"29595097062","amount":1020},{"order":"29595222822","amount":1020},{"order":"29584577446","amount":1020},{"order":"29585686374","amount":1020},{"order":"29579912422","amount":990},{"order":"29579148454","amount":990},{"order":"29578714086","amount":159},{"order":"29578467110","amount":990},{"order":"29578353894","amount":990},{"order":"29578045286","amount":1020},{"order":"29578181862","amount":1020},{"order":"29578056486","amount":2040},{"order":"29577984294","amount":2040},{"order":"29521294630","amount":1050},{"order":"29521271270","amount":1050},{"order":"29511656678","amount":1050},{"order":"29511582438","amount":1050},{"order":"29503897638","amount":1020},{"order":"29503915686","amount":1020},{"order":"29503479526","amount":1050},{"order":"29503480294","amount":1050},{"order":"29499944230","amount":1000},{"order":"29499944294","amount":1000},{"order":"29498897254","amount":1050},{"order":"29498897702","amount":1050},{"order":"29490917478","amount":1050},{"order":"29490868710","amount":1050},{"order":"29488269734","amount":1000},{"order":"29488521894","amount":1000},{"order":"29488129766","amount":1000},{"order":"29488684390","amount":1000},{"order":"29487024294","amount":1050},{"order":"29487043942","amount":1050},{"order":"29487038182","amount":1050},{"order":"29487022822","amount":1050},{"order":"29475651046","amount":1050},{"order":"29475572838","amount":1050},{"order":"29472654886","amount":1050},{"order":"29472546022","amount":1050},{"order":"29376457638","amount":1050},{"order":"29376618790","amount":1050},{"order":"29372705702","amount":1050},{"order":"29372746918","amount":1050},{"order":"29324981734","amount":1050},{"order":"29325052966","amount":1050},{"order":"29324565990","amount":1050},{"order":"29324610982","amount":1050},{"order":"29324176358","amount":1050},{"order":"29324204646","amount":1050},{"order":"29322723302","amount":2100},{"order":"29321161126","amount":2100},{"order":"29321200934","amount":2100},{"order":"29320710246","amount":3150},{"order":"29320689446","amount":5250},{"order":"29320422758","amount":1050},{"order":"29320229798","amount":2100},{"order":"29320212582","amount":2100},{"order":"29320259878","amount":5250},{"order":"29320237030","amount":1050},{"order":"29320311014","amount":5250},{"order":"29313551014","amount":2100},{"order":"29313528934","amount":5250},{"order":"29313330278","amount":5250},{"order":"29309418406","amount":5250},{"order":"29250020006","amount":1050},{"order":"29250000166","amount":4200},{"order":"29250087014","amount":5250},{"order":"29250059750","amount":1050},{"order":"29250018150","amount":3150},{"order":"29249976614","amount":4200},{"order":"29249801830","amount":5250},{"order":"29240651238","amount":5250},{"order":"29203828262","amount":3150},{"order":"29195981798","amount":1050},{"order":"29195932070","amount":1050},{"order":"29195980582","amount":1050},{"order":"29195981286","amount":1050},{"order":"29195705894","amount":2100},{"order":"29195678438","amount":2100},{"order":"29195667686","amount":1050},{"order":"29195761510","amount":1050},{"order":"29195733798","amount":1050},{"order":"29195721766","amount":1050},{"order":"29195728550","amount":1050},{"order":"29195559462","amount":1050},{"order":"29195615078","amount":1050},{"order":"29195500582","amount":1050},{"order":"29192155750","amount":2100},{"order":"29192157670","amount":2100},{"order":"29187893094","amount":1050},{"order":"29187884390","amount":1050},{"order":"29187450918","amount":1050},{"order":"29187453030","amount":1050},{"order":"29187413158","amount":1050},{"order":"29187431462","amount":1050},{"order":"29186986278","amount":1050},{"order":"29186994662","amount":1050},{"order":"29186704166","amount":1050},{"order":"29186524646","amount":5250},{"order":"29186336294","amount":3150},{"order":"29186354726","amount":3150},{"order":"29175575462","amount":1020},{"order":"29175636582","amount":1020},{"order":"29156266534","amount":3060},{"order":"29156274086","amount":3060},{"order":"29156045670","amount":1020},{"order":"29156085414","amount":1020},{"order":"29155498086","amount":2040},{"order":"29155589734","amount":2040},{"order":"29106863398","amount":229},{"order":"29085307238","amount":169},{"order":"29084841830","amount":845},{"order":"29041101926","amount":398},{"order":"29039226086","amount":995},{"order":"29039009830","amount":1393},{"order":"29038401830","amount":796},{"order":"29018396326","amount":796},{"order":"29008596838","amount":199},{"order":"29007762982","amount":5150},{"order":"29003278694","amount":209},{"order":"28964953318","amount":1010},{"order":"28965073958","amount":1010},{"order":"28957860134","amount":1010},{"order":"28957880934","amount":1010},{"order":"28945928166","amount":1010},{"order":"28945876774","amount":1010},{"order":"28941124646","amount":1010},{"order":"28941227494","amount":1010},{"order":"28940363750","amount":1010},{"order":"28940510694","amount":1010},{"order":"28940484134","amount":1010},{"order":"28940484582","amount":1010},{"order":"28940030374","amount":1010},{"order":"28939941734","amount":1010},{"order":"28939594534","amount":1010},{"order":"28939622054","amount":1010},{"order":"28934446950","amount":1010},{"order":"28934754086","amount":980},{"order":"28922217446","amount":1010},{"order":"28917119142","amount":1010},{"order":"28917546406","amount":1010},{"order":"28916902502","amount":980},{"order":"28916850278","amount":980},{"order":"28915493094","amount":1010},{"order":"28915621542","amount":1010},{"order":"28902560550","amount":980},{"order":"28902630502","amount":980},{"order":"28901966694","amount":980},{"order":"28901861734","amount":980},{"order":"28900709542","amount":980},{"order":"28900711270","amount":980},{"order":"28609574630","amount":1030},{"order":"28510891814","amount":450},{"order":"28510953062","amount":360},{"order":"28192753958","amount":970},{"order":"28192706790","amount":970},{"order":"28191451238","amount":1940},{"order":"28185388710","amount":3000},{"order":"28016488742","amount":990},{"order":"27989546470","amount":990},{"order":"27989054310","amount":990},{"order":"27989195302","amount":960},{"order":"27498602150","amount":2970},{"order":"27498949542","amount":2880},{"order":"27499031206","amount":4950},{"order":"27499056870","amount":4800},{"order":"27497737574","amount":4950},{"order":"27494179878","amount":990},{"order":"27493949158","amount":960},{"order":"27494024038","amount":990},{"order":"27493984614","amount":960},{"order":"27494228902","amount":990},{"order":"27494335398","amount":960},{"order":"27494049126","amount":3840},{"order":"27494017958","amount":3840},{"order":"27493623782","amount":960},{"order":"27493594598","amount":960},{"order":"27493467814","amount":960},{"order":"27493556646","amount":960},{"order":"27493456870","amount":1920},{"order":"27492798118","amount":960},{"order":"27493151398","amount":960},{"order":"27492642150","amount":960},{"order":"27473140390","amount":990},{"order":"27472936230","amount":2970},{"order":"27472964774","amount":990},{"order":"27462561958","amount":2970},{"order":"27460235046","amount":990},{"order":"27460354918","amount":960},{"order":"27460337702","amount":2970},{"order":"27309417766","amount":1020},{"order":"27309158246","amount":1020},{"order":"27309054566","amount":1020},{"order":"27307771942","amount":1020},{"order":"27306899942","amount":2040},{"order":"27266581350","amount":3060},{"order":"27249636582","amount":5100},{"order":"27239209510","amount":5150},{"order":"27232240614","amount":2020},{"order":"27231980262","amount":5050},{"order":"27232397414","amount":5050},{"order":"27231626022","amount":4120},{"order":"27224537510","amount":1010},{"order":"27136238886","amount":1050},{"order":"27136276518","amount":1050},{"order":"27134868582","amount":1050},{"order":"27134126886","amount":3150},{"order":"26790683558","amount":1040},{"order":"26693575462","amount":5050},{"order":"26388819174","amount":4160},{"order":"26373999526","amount":5200},{"order":"26211479910","amount":2060},{"order":"29722082086","amount":1770},{"order":"29722808550","amount":810},{"order":"29722753254","amount":567},{"order":"29722016806","amount":189},{"order":"29722015270","amount":490},{"order":"29721364070","amount":1770},{"order":"29721258726","amount":567},{"order":"29046424358","amount":597}
-];
+// --- 核心逻辑完全恢复 V9.9 版本，Key 使用 V9_2 ---
+const DATA_SOURCE = [{"order":"29844392230","amount":1240},{"order":"29787668582","amount":670},{"order":"29779855398","amount":670},{"order":"29758217446","amount":208},{"order":"29758125414","amount":670},{"order":"29754938534","amount":189},{"order":"29754882022","amount":740},{"order":"29723444262","amount":1180},{"order":"29722926822","amount":189},{"order":"29722933926","amount":590},{"order":"29722673446","amount":1770},{"order":"29722664486","amount":189},{"order":"29722661094","amount":490},{"order":"29722722854","amount":590},{"order":"29722357286","amount":490},{"order":"29722422118","amount":490},{"order":"29722343654","amount":490},{"order":"29721815398","amount":590},{"order":"29722199910","amount":1470},{"order":"29722121958","amount":590},{"order":"29722146598","amount":189},{"order":"29722006502","amount":590},{"order":"29722009638","amount":189},{"order":"29664786726","amount":1345},{"order":"29657407974","amount":960},{"order":"29657049766","amount":960},{"order":"29657089702","amount":1000},{"order":"29657268006","amount":1000},{"order":"29613864934","amount":990},{"order":"29613779238","amount":990},{"order":"29613146918","amount":1194},{"order":"29595224358","amount":1020},{"order":"29594630822","amount":1020},{"order":"29594980966","amount":1020},{"order":"29595121894","amount":1020},{"order":"29595097062","amount":1020},{"order":"29595222822","amount":1020},{"order":"29584577446","amount":1020},{"order":"29585686374","amount":1020},{"order":"29579912422","amount":990},{"order":"29613146918","amount":1194},{"order":"29595224358","amount":1020},{"order":"29594630822","amount":1020},{"order":"29594980966","amount":1020},{"order":"29595121894","amount":1020},{"order":"29595097062","amount":1020},{"order":"29595222822","amount":1020},{"order":"29584577446","amount":1020},{"order":"29585686374","amount":1020},{"order":"29579912422","amount":990},{"order":"29579148454","amount":990},{"order":"29578714086","amount":159},{"order":"29578467110","amount":990},{"order":"29578353894","amount":990},{"order":"29578045286","amount":1020},{"order":"29578181862","amount":1020},{"order":"29578056486","amount":2040},{"order":"29577984294","amount":2040},{"order":"29521294630","amount":1050},{"order":"29521271270","amount":1050},{"order":"29511656678","amount":1050},{"order":"29511582438","amount":1050},{"order":"29503897638","amount":1020},{"order":"29503915686","amount":1020},{"order":"29503479526","amount":1050},{"order":"29503480294","amount":1050},{"order":"29499944230","amount":1000},{"order":"29499944294","amount":1000},{"order":"29498897254","amount":1050},{"order":"29498897702","amount":1050},{"order":"29490917478","amount":1050},{"order":"29490868710","amount":1050},{"order":"29488269734","amount":1000},{"order":"29488521894","amount":1000},{"order":"29488129766","amount":1000},{"order":"29488684390","amount":1000},{"order":"29487024294","amount":1050},{"order":"29487043942","amount":1050},{"order":"29487038182","amount":1050},{"order":"29487022822","amount":1050},{"order":"29475651046","amount":1050},{"order":"29475572838","amount":1050},{"order":"29472654886","amount":1050},{"order":"29472546022","amount":1050},{"order":"29376457638","amount":1050},{"order":"29376618790","amount":1050},{"order":"29372705702","amount":1050},{"order":"29372746918","amount":1050},{"order":"29324981734","amount":1050},{"order":"29325052966","amount":1050},{"order":"29324565990","amount":1050},{"order":"29324610982","amount":1050},{"order":"29324176358","amount":1050},{"order":"29324204646","amount":1050},{"order":"29322723302","amount":2100},{"order":"29321161126","amount":2100},{"order":"29321200934","amount":2100},{"order":"29320710246","amount":3150},{"order":"29320689446","amount":5250},{"order":"29320422758","amount":1050},{"order":"29320229798","amount":2100},{"order":"29320212582","amount":2100},{"order":"29320259878","amount":5250},{"order":"29320237030","amount":1050},{"order":"29320311014","amount":5250},{"order":"29313551014","amount":2100},{"order":"29313528934","amount":5250},{"order":"29313330278","amount":5250},{"order":"29309418406","amount":5250},{"order":"29250020006","amount":1050},{"order":"29250000166","amount":4200},{"order":"29250087014","amount":5250},{"order":"29250059750","amount":1050},{"order":"29250018150","amount":3150},{"order":"29249976614","amount":4200},{"order":"29249801830","amount":5250},{"order":"29240651238","amount":5250},{"order":"29203828262","amount":3150},{"order":"29195981798","amount":1050},{"order":"29195932070","amount":1050},{"order":"29195980582","amount":1050},{"order":"29195981286","amount":1050},{"order":"29195705894","amount":2100},{"order":"29195678438","amount":2100},{"order":"29195667686","amount":1050},{"order":"29195761510","amount":1050},{"order":"29195733798","amount":1050},{"order":"29195721766","amount":1050},{"order":"29195728550","amount":1050},{"order":"29195559462","amount":1050},{"order":"29195615078","amount":1050},{"order":"29195500582","amount":1050},{"order":"29192155750","amount":2100},{"order":"29192157670","amount":2100},{"order":"29187893094","amount":1050},{"order":"29187884390","amount":1050},{"order":"29187450918","amount":1050},{"order":"29187453030","amount":1050},{"order":"29187413158","amount":1050},{"order":"29187431462","amount":1050},{"order":"29186986278","amount":1050},{"order":"29186994662","amount":1050},{"order":"29186704166","amount":1050},{"order":"29186524646","amount":5250},{"order":"29186336294","amount":3150},{"order":"29186354726","amount":3150},{"order":"29175575462","amount":1020},{"order":"29175636582","amount":1020},{"order":"29156266534","amount":3060},{"order":"29156274086","amount":3060},{"order":"29156045670","amount":1020},{"order":"29156085414","amount":1020},{"order":"29155498086","amount":2040},{"order":"29155589734","amount":2040},{"order":"29106863398","amount":229},{"order":"29085307238","amount":169},{"order":"29084841830","amount":845},{"order":"29041101926","amount":398},{"order":"29039226086","amount":995},{"order":"29039009830","amount":1393},{"order":"29038401830","amount":796},{"order":"29018396326","amount":796},{"order":"29008596838","amount":199},{"order":"29007762982","amount":5150},{"order":"29003278694","amount":209},{"order":"28964953318","amount":1010},{"order":"28965073958","amount":1010},{"order":"28957860134","amount":1010},{"order":"28957880934","amount":1010},{"order":"28945928166","amount":1010},{"order":"28945876774","amount":1010},{"order":"28941124646","amount":1010},{"order":"28941227494","amount":1010},{"order":"28940363750","amount":1010},{"order":"28940510694","amount":1010},{"order":"28940484134","amount":1010},{"order":"28940484582","amount":1010},{"order":"28940030374","amount":1010},{"order":"28940030374","amount":1010},{"order":"28939941734","amount":1010},{"order":"28939594534","amount":1010},{"order":"28939622054","amount":1010},{"order":"28934446950","amount":1010},{"order":"28934754086","amount":980},{"order":"28922217446","amount":1010},{"order":"28917119142","amount":1010},{"order":"28917546406","amount":1010},{"order":"28916902502","amount":980},{"order":"28916850278","amount":980},{"order":"28915493094","amount":1010},{"order":"28915621542","amount":1010},{"order":"28902560550","amount":980},{"order":"28902630502","amount":980},{"order":"28901966694","amount":980},{"order":"28901861734","amount":980},{"order":"28900709542","amount":980},{"order":"28900711270","amount":980},{"order":"28609574630","amount":1030},{"order":"28510891814","amount":450},{"order":"28510953062","amount":360},{"order":"28192753958","amount":970},{"order":"28192706790","amount":970},{"order":"28191451238","amount":1940},{"order":"28185388710","amount":3000},{"order":"28016488742","amount":990},{"order":"27989546470","amount":990},{"order":"27989054310","amount":990},{"order":"27989195302","amount":960},{"order":"27498602150","amount":2970},{"order":"27498949542","amount":2880},{"order":"27499031206","amount":4950},{"order":"27499056870","amount":4800},{"order":"27497737574","amount":4950},{"order":"27494179878","amount":990},{"order":"27493949158","amount":960},{"order":"27494024038","amount":990},{"order":"27493984614","amount":960},{"order":"27494228902","amount":990},{"order":"27494335398","amount":960},{"order":"27494049126","amount":3840},{"order":"27494017958","amount":3840},{"order":"27493623782","amount":960},{"order":"27493594598","amount":960},{"order":"27493467814","amount":960},{"order":"27493556646","amount":960},{"order":"27493456870","amount":1920},{"order":"27492798118","amount":960},{"order":"27493151398","amount":960},{"order":"27492642150","amount":960},{"order":"27473140390","amount":990},{"order":"27472936230","amount":2970},{"order":"27472964774","amount":990},{"order":"27462561958","amount":2970},{"order":"27460235046","amount":990},{"order":"27460354918","amount":960},{"order":"27460337702","amount":2970},{"order":"27309417766","amount":1020},{"order":"27309158246","amount":1020},{"order":"27309054566","amount":1020},{"order":"27307771942","amount":1020},{"order":"27306899942","amount":2040},{"order":"27266581350","amount":3060},{"order":"27249636582","amount":5100},{"order":"27239209510","amount":5150},{"order":"27232240614","amount":2020},{"order":"27231980262","amount":5050},{"order":"27232397414","amount":5050},{"order":"27231626022","amount":4120},{"order":"27224537510","amount":1010},{"order":"27136238886","amount":1050},{"order":"27136276518","amount":1050},{"order":"27134868582","amount":1050},{"order":"27134126886","amount":3150},{"order":"26790683558","amount":1040},{"order":"26693575462","amount":5050},{"order":"26388819174","amount":4160},{"order":"26373999526","amount":5200},{"order":"26211479910","amount":2060},{"order":"29722082086","amount":1770},{"order":"29722808550","amount":810},{"order":"29722753254","amount":567},{"order":"29722016806","amount":189},{"order":"29722015270","amount":490},{"order":"29721364070","amount":1770},{"order":"29721258726","amount":567},{"order":"29046424358","amount":597}];
 
 let inventory=[];
-let deleteRecords=JSON.parse(localStorage.getItem('deleteRecords_V10_0')||'[]');
+let deleteRecords=JSON.parse(localStorage.getItem('deleteRecords_V9_2')||'[]');
 
-const saveDeleteRecords=()=>localStorage.setItem('deleteRecords_V10_0',JSON.stringify(deleteRecords));
+// 保存逻辑：务必使用 V9_2 版本的 Key 以读取迁移的数据
+const saveDeleteRecords=()=>localStorage.setItem('deleteRecords_V9_2',JSON.stringify(deleteRecords));
 const saveInventory = () => {
-    localStorage.setItem('invoiceInventory_V10_0',JSON.stringify(inventory));
+    localStorage.setItem('invoiceInventory_V9_2',JSON.stringify(inventory));
     renderStats();
 };
 
-const loadHeaderHistory=()=>JSON.parse(localStorage.getItem('headerHistory_V10_0')||'[]');
+const loadHeaderHistory=()=>JSON.parse(localStorage.getItem('headerHistory_V9_2')||'[]');
 const saveHeaderHistory=h=>{
   if(!h) return; const arr=loadHeaderHistory().filter(x=>x!==h);
   arr.unshift(h); if(arr.length>10) arr.pop();
-  localStorage.setItem('headerHistory_V10_0',JSON.stringify(arr));
+  localStorage.setItem('headerHistory_V9_2',JSON.stringify(arr));
 };
 function log(msg){ const el=document.getElementById('debug-log'); const t=new Date().toLocaleTimeString(); if(el) el.textContent+=`[${t}] ${msg}\n`; }
 
@@ -411,177 +146,88 @@ function normalize(raw){
 }
 const makeKey=o=>o.order+'|'+o.amount;
 
-// 仪表盘统计渲染
 function renderStats() {
     const el = document.getElementById('inventory-stats');
     if (!el) return;
-    
-    if (!inventory || inventory.length === 0) {
-        el.innerHTML = '<div style="text-align:center; padding:10px; color:#888;">📦 库存空空如也</div>';
-        return;
-    }
-    
+    if (!inventory || inventory.length === 0) { el.innerHTML = '库存为空'; return; }
     const count = inventory.length;
     const total = inventory.reduce((a, b) => a + b.amount, 0);
-    let min = 0, max = 0;
-    if (count > 0) {
-        min = inventory.reduce((m, p) => (p.amount < m ? p.amount : m), inventory[0].amount);
-        max = inventory.reduce((m, p) => (p.amount > m ? p.amount : m), inventory[0].amount);
-    }
+    let min = inventory.reduce((m, p) => (p.amount < m ? p.amount : m), inventory[0].amount);
+    let max = inventory.reduce((m, p) => (p.amount > m ? p.amount : m), inventory[0].amount);
     const fmt = (n) => n.toLocaleString();
-    
     el.innerHTML = `
       <div style="font-weight:600; margin-bottom:10px; opacity:0.8;">📊 实时库存监控</div>
       <div class="stats-grid">
-        <div class="stat-item">
-          <span class="stat-val">${fmt(total)}</span>
-          <span class="stat-label">总金额 (元)</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-val">${fmt(count)}</span>
-          <span class="stat-label">订单数 (张)</span>
-        </div>
-        <div class="stat-range">
-          单笔范围：<b>${fmt(min)}</b> ~ <b>${fmt(max)}</b> 元
-        </div>
-      </div>
-    `;
+        <div class="stat-item"><span class="stat-val">${fmt(total)}</span><span class="stat-label">总金额</span></div>
+        <div class="stat-item"><span class="stat-val">${fmt(count)}</span><span class="stat-label">订单数</span></div>
+        <div style="grid-column: 1/-1; text-align:center; font-size:0.8rem; margin-top:5px;">范围：${fmt(min)} ~ ${fmt(max)} 元</div>
+      </div>`;
 }
 
 async function loadInventory(forceReset=false){
   if(!forceReset){
-    const local=JSON.parse(localStorage.getItem('invoiceInventory_V10_0')||'null');
+    const local=JSON.parse(localStorage.getItem('invoiceInventory_V9_2')||'null');
     if(local){ 
         inventory=normalize(local); 
-        log(`从缓存读取：${inventory.length} 条`); 
         renderStats();
         return; 
     }
   }
-  log(`读取内置源数据：共 ${DATA_SOURCE.length} 条记录...`);
   inventory=normalize(DATA_SOURCE); 
   saveInventory();
-  if(forceReset){ 
-    deleteRecords=[]; saveDeleteRecords(); 
-    log(`已重置。去重后有效库存：${inventory.length} 条`); 
-  }
+  if(forceReset){ deleteRecords=[]; saveDeleteRecords(); }
 }
 
 function renderHeaderHistory(){
   const div=document.getElementById('header-history'); div.innerHTML='';
   loadHeaderHistory().forEach((h,i)=>{
     const wrap=document.createElement('div'); wrap.className='hdr-item';
-    const txt=document.createElement('button'); txt.className='txt'; txt.textContent=h;
+    const txt=document.createElement('button'); txt.textContent=h;
     txt.onclick=()=>document.getElementById('company-header').value=h;
-    const del=document.createElement('button'); del.className='del'; del.textContent='✕';
-    del.onclick=()=>{ const a=loadHeaderHistory(); a.splice(i,1); localStorage.setItem('headerHistory_V10_0',JSON.stringify(a)); renderHeaderHistory(); };
+    const del=document.createElement('button'); del.textContent='✕';
+    del.onclick=()=>{ const a=loadHeaderHistory(); a.splice(i,1); localStorage.setItem('headerHistory_V9_2',JSON.stringify(a)); renderHeaderHistory(); };
     wrap.appendChild(txt); wrap.appendChild(del); div.appendChild(wrap);
   });
 }
 
 function renderDeleteRecords(){
   const list=document.getElementById('record-list'); list.innerHTML='';
-  if(deleteRecords.length === 0) {
-      list.innerHTML = '<div style="padding:10px;text-align:center;color:#999">暂无删除记录</div>';
-      return;
-  }
+  if(deleteRecords.length === 0) { list.innerHTML = '暂无记录'; return; }
   deleteRecords.slice(0,20).forEach((batch, batchIdx)=>{
     const total=batch.reduce((s,inv)=>s+inv.sum,0);
     const item=document.createElement('div'); item.className='record-item';
-    let html = `<div class="record-title">📄 批次 ${batchIdx+1}：${batch.length}张 / 合计 ${total}元</div>`;
-    html += `<div class="orders">`;
+    let html = `<div class="record-title">批次 ${batchIdx+1} | 合计 ${total}元</div>`;
     batch.forEach((inv, invIdx) => {
         inv.orders.forEach((o, orderIdx) => {
-           html += `
-             <div class="single-order-row">
-               <span>${o.order} <span style="color:#999">|</span> <b>${o.amount}</b>元</span>
-               <button class="btn-recover-one" onclick="recoverSingleOrder(${batchIdx}, ${invIdx}, ${orderIdx})">恢复</button>
-             </div>
-           `;
+           html += `<div class="single-order-row"><span>${o.order} | ${o.amount}元</span><button class="btn-recover-one" onclick="recoverSingleOrder(${batchIdx}, ${invIdx}, ${orderIdx})">恢复</button></div>`;
         });
     });
-    html += `</div>`;
-    html += `<button class="btn-recover-batch" onclick="recoverBatch(${batchIdx})">↺ 恢复整批数据</button>`;
-    item.innerHTML=html;
-    list.appendChild(item);
+    html += `<button onclick="recoverBatch(${batchIdx})" style="width:100%; padding:8px; margin-top:5px; border:none; border-radius:5px;">恢复整批</button>`;
+    item.innerHTML=html; list.appendChild(item);
   });
 }
 
-function renderEditSearch(){
-  const input = document.getElementById('search-order-input');
-  const btn = document.getElementById('btn-search-order');
-  const area = document.getElementById('edit-result-area');
-  btn.onclick = () => {
-    const val = input.value.trim();
-    if(!val) return alert('请输入订单号');
-    area.innerHTML = '';
-    const found = inventory.filter(o => o.order.includes(val));
-    if(found.length === 0){
-      area.innerHTML = '<div style="color:red;padding:10px 0;">未找到相关订单。</div>';
-      return;
-    }
-    found.forEach(item => {
-      const div = document.createElement('div'); div.className = 'edit-row';
-      div.innerHTML = `<span>订单: ${item.order} <br> 原额: ${item.amount}</span><input type="number" value="${item.amount}"><button class="btn-update">保存</button>`;
-      const newValInput = div.querySelector('input');
-      const saveBtn = div.querySelector('.btn-update');
-      saveBtn.onclick = () => {
-        const newAmt = Math.round(Number(newValInput.value));
-        if(!newAmt || newAmt <= 0) return alert('金额必须大于0');
-        const oldKey = makeKey(item);
-        const idx = inventory.findIndex(x => makeKey(x) === oldKey);
-        if(idx === -1) { alert('数据已过期或不存在，请重新搜索'); return; }
-        inventory[idx].amount = newAmt;
-        inventory = normalize(inventory);
-        saveInventory();
-        alert(`订单 ${item.order} 金额已更新为 ${newAmt}`);
-        log(`修正数据：订单 ${item.order} 从 ${item.amount} -> ${newAmt}`);
-        btn.click(); 
-      };
-      area.appendChild(div);
-    });
-  };
-}
-
-/* Actions */
 window.recoverSingleOrder = function(batchIdx, invIdx, orderIdx) {
-    const batch = deleteRecords[batchIdx]; if(!batch) return;
-    const inv = batch[invIdx]; if(!inv) return;
-    const order = inv.orders[orderIdx]; if(!order) return;
+    const batch = deleteRecords[batchIdx]; const inv = batch[invIdx]; const order = inv.orders[orderIdx];
     if(!inventory.find(x => makeKey(x) === makeKey(order))) { inventory.push(order); }
-    inventory = normalize(inventory);
-    inv.orders.splice(orderIdx, 1);
-    inv.sum = inv.orders.reduce((a, b) => a + b.amount, 0);
+    inventory = normalize(inventory); inv.orders.splice(orderIdx, 1);
     if(inv.orders.length === 0) { batch.splice(invIdx, 1); }
     if(batch.length === 0) { deleteRecords.splice(batchIdx, 1); }
     saveDeleteRecords(); saveInventory(); renderDeleteRecords();
-    log(`已单独恢复订单：${order.order}`);
 };
 
 window.recoverBatch = function(batchIdx) {
     const rec = deleteRecords.splice(batchIdx, 1)[0];
     if(rec) {
-        rec.forEach(inv => inv.orders.forEach(o => {
-            if(!inventory.find(x => makeKey(x) === makeKey(o))) inventory.push(o);
-        }));
-        inventory = normalize(inventory);
-        saveDeleteRecords(); saveInventory(); renderDeleteRecords();
-        log(`已恢复整批数据 (批次 ${batchIdx+1})`);
+        rec.forEach(inv => inv.orders.forEach(o => { if(!inventory.find(x => makeKey(x) === makeKey(o))) inventory.push(o); }));
+        inventory = normalize(inventory); saveDeleteRecords(); saveInventory(); renderDeleteRecords();
     }
 };
 
 function bindAccordion(h,c){ h.addEventListener('click',()=>{ const open=c.style.display==='block'; c.style.display=open?'none':'block'; h.classList.toggle('open',!open); }); }
-function shuffleArray(array) {
-  let currentIndex = array.length,  randomIndex;
-  while (currentIndex != 0) {
-    randomIndex = Math.floor(Math.random() * currentIndex);
-    currentIndex--;
-    [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
-  }
-  return array;
-}
+function shuffleArray(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
-/* Algorithm */
+// --- 算法部分 (与 V9.9 完全一致) ---
 function selectOrdersByDP(target, maxSingle, allowApprox, onlyHigher, minOrderStr, maxOrderStr, usePool){
   let pool = usePool.slice();
   if(minOrderStr) pool = pool.filter(o => o.order >= minOrderStr);
@@ -601,11 +247,9 @@ function selectOrdersByDP(target, maxSingle, allowApprox, onlyHigher, minOrderSt
   if(dp[target]) return {sum:target, orders: dp[target].picks.map(i=>pool[i])};
   if(!allowApprox) return null;
   for(let d=1; d<=500; d++){
-    const sUp = target + d;
-    const sDn = target - d;
-    if(onlyHigher){
-      if(sUp<=hi && dp[sUp]) return {sum:sUp, orders: dp[sUp].picks.map(i=>pool[i])};
-    }else{
+    const sUp = target + d; const sDn = target - d;
+    if(onlyHigher){ if(sUp<=hi && dp[sUp]) return {sum:sUp, orders: dp[sUp].picks.map(i=>pool[i])}; }
+    else {
       if(sDn>=0 && dp[sDn]) return {sum:sDn, orders: dp[sDn].picks.map(i=>pool[i])};
       if(sUp<=hi && dp[sUp]) return {sum:sUp, orders: dp[sUp].picks.map(i=>pool[i])};
     }
@@ -614,293 +258,105 @@ function selectOrdersByDP(target, maxSingle, allowApprox, onlyHigher, minOrderSt
 }
 
 function splitWithCapBacktrack(selectedOrders, minS, maxS, maxSame){
-  if(!(minS>0) && !(maxS>0)){
-    const total=selectedOrders.reduce((a,o)=>a+o.amount,0);
-    return [{sum:total, orders:selectedOrders.slice()}];
-  }
-  const lo=(minS>0)?minS:1;
-  const hi=(maxS>0)?maxS:selectedOrders.reduce((a,o)=>a+o.amount,0);
-  let avail=selectedOrders.slice();
-  const capMap=new Map();
-  const keyOf=o=>o.order+'|'+o.amount;
-  function bestSubsetInRange(avail, lo, hi){
-    const maxSum=Math.min(hi, avail.reduce((a,o)=>a+o.amount,0));
+  if(!(minS>0) && !(maxS>0)){ return [{sum:selectedOrders.reduce((a,o)=>a+o.amount,0), orders:selectedOrders.slice()}]; }
+  const lo=minS||1, hi=maxS||selectedOrders.reduce((a,o)=>a+o.amount,0);
+  let avail=selectedOrders.slice(); const capMap=new Map();
+  function bestSubsetInRange(av, l, h){
+    const maxSum=Math.min(h, av.reduce((a,o)=>a+o.amount,0));
     const dp=Array(maxSum+1).fill(null); dp[0]={cnt:0,picks:[]};
-    for(let i=0;i<avail.length;i++){
-      const a=avail[i].amount|0;
-      for(let s=maxSum;s>=a;s--){
-        if(dp[s-a] && (!dp[s] || dp[s-a].cnt+1 < dp[s].cnt)){
-          dp[s]={cnt:dp[s-a].cnt+1,picks:dp[s-a].picks.concat(i)};
-        }
-      }
+    for(let i=0;i<av.length;i++){
+      const a=av[i].amount|0;
+      for(let s=maxSum;s>=a;s--){ if(dp[s-a] && (!dp[s] || dp[s-a].cnt+1 < dp[s].cnt)){ dp[s]={cnt:dp[s-a].cnt+1,picks:dp[s-a].picks.concat(i)}; } }
     }
-    for(let s=maxSum; s>=Math.max(1,lo); s--){
-      if(dp[s] && s>=lo && s<=hi) return {sum:s, picks:dp[s].picks};
-    }
+    for(let s=maxSum; s>=l; s--){ if(dp[s]) return {sum:s, picks:dp[s].picks}; }
     return null;
-  }
-  function genCandidates(av,limit=8){
-    const cands=[];
-    const step=Math.max(1, Math.floor((hi-lo)/24));
-    for(let s=Math.min(hi,av.reduce((a,o)=>a+o.amount,0)); s>=lo; s-=step){
-      if(isFinite(maxSame) && (capMap.get(s)||0) >= maxSame) continue;
-      const probe=bestSubsetInRange(av, s, s);
-      if(probe){ cands.push(probe); if(cands.length>=limit) break; }
-    }
-    if(cands.length===0){
-      const p=bestSubsetInRange(av, lo, hi);
-      if(p && (!isFinite(maxSame) || (capMap.get(p.sum)||0) < maxSame)) cands.push(p);
-    }
-    return cands;
-  }
-  const memo=new Set();
-  function sig(av){
-    const hist=new Map(); av.forEach(o=>hist.set(o.amount,(hist.get(o.amount)||0)+1));
-    const hm=Array.from(hist.entries()).sort((a,b)=>a[0]-b[0]).map(([k,v])=>k+':'+v).join(',');
-    const cm=Array.from(capMap.entries()).sort((a,b)=>a[0]-b[0]).map(([k,v])=>k+':'+v).join(',');
-    return hm+'|'+cm;
   }
   function dfs(av){
     if(av.length===0) return [];
-    const signature=sig(av); if(memo.has(signature)) return null;
-    const cands=genCandidates(av,8);
-    for(const cand of cands){
-      if(!cand) continue;
-      const pick=cand.picks.map(i=>av[i]);
-      const used=new Set(pick.map(keyOf));
-      const rest=av.filter(o=>!used.has(keyOf(o)));
-      capMap.set(cand.sum,(capMap.get(cand.sum)||0)+1);
-      const sub=dfs(rest);
-      if(sub){ return [{sum:cand.sum,orders:pick}, ...sub]; }
-      capMap.set(cand.sum,capMap.get(cand.sum)-1);
-      if(capMap.get(cand.sum)===0) capMap.delete(cand.sum);
+    const cands=[]; const step=Math.max(1, Math.floor((hi-lo)/24));
+    for(let s=Math.min(hi,av.reduce((a,o)=>a+o.amount,0)); s>=lo; s-=step){
+      if(isFinite(maxSame) && (capMap.get(s)||0) >= maxSame) continue;
+      const probe=bestSubsetInRange(av, s, s); if(probe){ cands.push(probe); if(cands.length>=8) break; }
     }
-    memo.add(signature);
+    for(const cand of cands){
+      const pick=cand.picks.map(i=>av[i]); const used=new Set(pick.map(makeKey));
+      const rest=av.filter(o=>!used.has(makeKey(o)));
+      capMap.set(cand.sum,(capMap.get(cand.sum)||0)+1);
+      const sub=dfs(rest); if(sub) return [{sum:cand.sum,orders:pick}, ...sub];
+      capMap.set(cand.sum,capMap.get(cand.sum)-1);
+    }
     return null;
   }
   return dfs(avail);
 }
 
-function splitFixedCount(selectedOrders, minS, maxS, k){
-  const lo=(minS>0)?minS:1;
-  const total=selectedOrders.reduce((a,o)=>a+o.amount,0);
-  const hi=(maxS>0)?maxS:total;
-  const base=selectedOrders.map((o,idx)=>({...o,__uid:'u'+idx}));
-  function bestSubsetInRangeEx(avail, lo, hi){
-    const maxSum=Math.min(hi, avail.reduce((a,o)=>a+o.amount,0));
-    const dp=Array(maxSum+1).fill(null); dp[0]={cnt:0,picks:[]};
-    for(let i=0;i<avail.length;i++){
-      const a=avail[i].amount|0;
-      for(let s=maxSum;s>=a;s--){
-        if(dp[s-a] && (!dp[s] || dp[s-a].cnt+1 < dp[s].cnt)){
-          dp[s]={cnt:dp[s-a].cnt+1,picks:dp[s-a].picks.concat(i)};
-        }
-      }
-    }
-    for(let s=maxSum; s>=Math.max(1,lo); s--){
-      if(dp[s] && s>=lo && s<=hi) return {sum:s,picks:dp[s].picks};
-    }
-    return null;
-  }
-  const memo=new Map();
-  function sig(remT,k,avail){
-    const hist=new Map(); avail.forEach(x=>hist.set(x.amount,(hist.get(x.amount)||0)+1));
-    const hm=[...hist.entries()].sort((a,b)=>a[0]-b[0]).map(([v,c])=>v+':'+c).join(',');
-    return remT+'|'+k+'|'+hm;
-  }
-  function dfs(remT,k,avail){
-    const key=sig(remT,k,avail); if(memo.has(key)) return memo.get(key);
-    if(k===1){
-      const dp=Array(remT+1).fill(null); dp[0]=[];
-      for(let i=0;i<avail.length;i++){
-        const a=avail[i].amount|0;
-        for(let s=remT;s>=a;s--){
-          if(dp[s-a]!=null && dp[s]==null){ dp[s]=dp[s-a].concat(i); }
-        }
-      }
-      if(!dp[remT]){ memo.set(key,null); return null; }
-      const pick=dp[remT].map(i=>avail[i]);
-      const sum=remT;
-      if(sum<lo || sum>hi){ memo.set(key,null); return null; }
-      const res=[{sum,orders:pick.map(x=>({order:x.order,amount:x.amount}))}];
-      memo.set(key,res); return res;
-    }
-    const upper=Math.min(hi, remT-(k-1)*lo);
-    const lower=Math.max(lo, remT-(k-1)*hi);
-    if(lower>upper){ memo.set(key,null); return null; }
-    const first=bestSubsetInRangeEx(avail, lower, upper);
-    if(!first){ memo.set(key,null); return null; }
-    const trySubs=[];
-    for(let s=first.sum; s>=lower && trySubs.length<8; s--){
-      const t=bestSubsetInRangeEx(avail, s, s);
-      if(t) trySubs.push(t);
-    }
-    for(const cand of trySubs){
-      const pick=cand.picks.map(i=>avail[i]);
-      const used=new Set(pick.map(x=>x.__uid));
-      const rest=avail.filter(x=>!used.has(x.__uid));
-      const sub=dfs(remT-cand.sum, k-1, rest);
-      if(sub){ const res=[{sum:cand.sum,orders:pick.map(x=>({order:x.order,amount:x.amount}))}, ...sub]; memo.set(key,res); return res; }
-    }
-    memo.set(key,null); return null;
-  }
-  return dfs(total, k, base);
-}
-function tryCompute(target, minS, maxS, maxSame, invoiceCount, allowApprox, onlyHigher, filterMin, filterMax, pool){
-  const pickRes = selectOrdersByDP(target, maxS||0, allowApprox, onlyHigher, filterMin, filterMax, pool);
-  if(!pickRes) return null;
-  const selected = pickRes.orders;
-  const totalSel = pickRes.sum;
-  if(invoiceCount && invoiceCount>0){
-    const fixed = splitFixedCount(selected, minS||0, maxS||0, invoiceCount);
-    if(fixed && fixed.reduce((a,inv)=>a+inv.sum,0)===totalSel) return fixed;
-    return null;
-  }else{
-    const invs = splitWithCapBacktrack(selected, minS||0, maxS||0, isFinite(maxSame)?maxSame:Infinity);
-    if(invs && invs.reduce((a,inv)=>a+inv.sum,0)===totalSel) return invs;
-    return null;
-  }
-}
-
 document.addEventListener('DOMContentLoaded', async ()=>{
-  await loadInventory();
-  renderHeaderHistory();
-  renderDeleteRecords();
-  renderEditSearch(); 
-  
-  bindAccordion(document.getElementById('debug-acc-header'),document.getElementById('debug-acc-content'));
-  bindAccordion(document.getElementById('del-acc-header'),document.getElementById('record-list'));
-  bindAccordion(document.getElementById('edit-acc-header'),document.getElementById('edit-acc-content'));
+  await loadInventory(); renderHeaderHistory(); renderDeleteRecords();
   bindAccordion(document.getElementById('backup-acc-header'),document.getElementById('backup-acc-content'));
+  bindAccordion(document.getElementById('edit-acc-header'),document.getElementById('edit-acc-content'));
+  bindAccordion(document.getElementById('del-acc-header'),document.getElementById('record-list'));
 
-  document.getElementById('reset-btn').onclick=async()=>{
-    if(confirm('确定要重置并恢复初始数据吗？(删除记录将被清空，手动修改也将丢失)')){
-      await loadInventory(true);
-      renderDeleteRecords();
-      alert('库存已重置。');
-    }
-  };
-
-  let lastInv=null;
   document.getElementById('combine-btn').onclick=async ()=>{
     const outEl=document.getElementById('result-output');
-    const logEl=document.getElementById('debug-log');
     const loadEl=document.getElementById('loading-overlay');
     const retryTxt=document.getElementById('retry-count');
-    outEl.textContent=''; logEl.textContent='';
-    const tgt=+document.getElementById('target-input').value;
-    if(!tgt) return alert('请输入目标金额');
-    const minS=+document.getElementById('min-single').value||0;
-    const maxS=+document.getElementById('max-single').value||0;
-    if(minS && maxS && minS>maxS) return alert('下限不可大于上限');
+    outEl.textContent='';
+    const tgt=+document.getElementById('target-input').value; if(!tgt) return alert('请输入目标');
+    const minS=+document.getElementById('min-single').value||0, maxS=+document.getElementById('max-single').value||0;
     const msc=+document.getElementById('max-same-count').value||Infinity;
     const ic =+document.getElementById('invoice-count').value||0;
-    const allowApprox=document.getElementById('allow-approx').checked;
-    const onlyHigher=document.getElementById('only-higher').checked;
     const header=document.getElementById('company-header').value.trim();
-    const filterOrderMin = document.getElementById('filter-order-min').value.trim();
-    const filterOrderMax = document.getElementById('filter-order-max').value.trim();
     saveHeaderHistory(header); renderHeaderHistory();
-    const maxRetries = (isFinite(msc) || ic > 0) ? 2000 : 1; 
-    let attempt = 0; let success = null;
     loadEl.style.display = 'flex';
     setTimeout(async () => {
-        const startTime = Date.now();
-        while(attempt < maxRetries){
-            attempt++;
-            retryTxt.textContent = `${attempt} / ${maxRetries}`;
-            let currentPool = inventory.slice();
-            if(attempt > 1) shuffleArray(currentPool);
-            const res = tryCompute(tgt, minS, maxS, msc, ic, allowApprox, onlyHigher, filterOrderMin, filterOrderMax, currentPool);
-            if(res){ success = res; break; }
-            if(attempt % 50 === 0) await new Promise(r => setTimeout(r, 0));
+        let attempt = 0, success = null;
+        while(attempt < 2000){
+            attempt++; retryTxt.textContent = `${attempt} / 2000`;
+            let pool = inventory.slice(); if(attempt > 1) shuffleArray(pool);
+            const pick = selectOrdersByDP(tgt, maxS, document.getElementById('allow-approx').checked, document.getElementById('only-higher').checked, document.getElementById('filter-order-min').value, document.getElementById('filter-order-max').value, pool);
+            if(pick){
+                const invs = splitWithCapBacktrack(pick.orders, minS, maxS, msc);
+                if(invs){ success = invs; break; }
+            }
+            if(attempt % 100 === 0) await new Promise(r => setTimeout(r, 0));
         }
         loadEl.style.display = 'none';
-        const duration = ((Date.now() - startTime)/1000).toFixed(2);
-        log(`计算完成：耗时 ${duration}秒，尝试次数 ${attempt}`);
-        if(!success){
-            outEl.textContent=`无法组合出满足条件的金额 (已尝试 ${attempt} 种随机组合)。`;
-        } else {
-            const out=[];
-            success.forEach((inv,i)=>{
-                out.push(`发票${i+1}：${inv.sum}元${inv.orders.length>1?'（相关订单合并）':''}`);
-                inv.orders.forEach(o=> out.push(`订单号：${o.order}，金额：${o.amount}元`));
-                out.push('');
+        if(!success) outEl.textContent='计算失败';
+        else {
+            const out=[]; success.forEach((inv,i)=>{
+                out.push(`发票${i+1}：${inv.sum}元`); inv.orders.forEach(o=> out.push(`订单：${o.order} | ${o.amount}元`)); out.push('');
             });
             if(header) out.push(header,'');
-            out.push('不需要备注','568881753@qq.com');
-            outEl.textContent = out.join('\n');
-            lastInv=success;
+            outEl.textContent = out.join('\n'); lastInv=success;
             document.getElementById('confirm-delete-btn').classList.remove('hidden');
         }
     }, 50);
   };
+
   document.getElementById('confirm-delete-btn').onclick=()=>{
-    if(!lastInv) return;
-    deleteRecords.unshift(lastInv);
     const removeSet=new Set(lastInv.flatMap(inv=>inv.orders.map(makeKey)));
     inventory=inventory.filter(o=>!removeSet.has(makeKey(o)));
-    saveDeleteRecords(); 
-    saveInventory(); 
-    renderDeleteRecords();
-    document.getElementById('record-list').style.display='block';
+    deleteRecords.unshift(lastInv); saveDeleteRecords(); saveInventory(); renderDeleteRecords();
     document.getElementById('confirm-delete-btn').classList.add('hidden');
   };
-  document.getElementById('copy-btn').onclick=()=>{
-    navigator.clipboard.writeText(document.getElementById('result-output').textContent);
-    alert('结果已复制');
-  };
 
-  /* 备份逻辑 */
   document.getElementById('backup-btn').onclick = () => {
-    const data = {
-      inventory: localStorage.getItem('invoiceInventory_V10_0'),
-      deleteRecords: localStorage.getItem('deleteRecords_V10_0'),
-      headerHistory: localStorage.getItem('headerHistory_V10_0')
-    };
-    const jsonStr = JSON.stringify(data);
-    
-    try {
-        const blob = new Blob([jsonStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `invoice_backup_${new Date().toISOString().slice(0,10)}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-    } catch(e) {
-        console.error("下载失败，转为文本展示", e);
-    }
-
-    const txtArea = document.getElementById('backup-text');
-    const areaDiv = document.getElementById('backup-area');
-    txtArea.value = jsonStr;
-    areaDiv.style.display = 'block';
-    document.getElementById('backup-acc-content').style.display='block';
-    alert('备份数据已生成！\n\n如果浏览器没有自动下载文件，请全选复制下方的文本框内容，发送到新设备即可。');
+    const data = { inventory: localStorage.getItem('invoiceInventory_V9_2'), deleteRecords: localStorage.getItem('deleteRecords_V9_2'), headerHistory: localStorage.getItem('headerHistory_V9_2') };
+    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `backup.json`; a.click();
+    document.getElementById('backup-text').value = JSON.stringify(data); document.getElementById('backup-text').style.display='block';
   };
 
-  document.getElementById('restore-btn').onclick = () => {
-    document.getElementById('restore-input').click();
-  };
+  document.getElementById('restore-btn').onclick = () => document.getElementById('restore-input').click();
   document.getElementById('restore-input').onchange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const data = JSON.parse(ev.target.result);
-        if (data.inventory) localStorage.setItem('invoiceInventory_V10_0', data.inventory);
-        if (data.deleteRecords) localStorage.setItem('deleteRecords_V10_0', data.deleteRecords);
-        if (data.headerHistory) localStorage.setItem('headerHistory_V10_0', data.headerHistory);
-        alert('数据恢复成功！页面将立即刷新...');
-        location.reload();
-      } catch (err) {
-        alert('文件解析失败，请检查文件是否正确。');
-      }
+    const reader = new FileReader(); reader.onload = (ev) => {
+      const data = JSON.parse(ev.target.result);
+      if (data.inventory) localStorage.setItem('invoiceInventory_V9_2', data.inventory);
+      if (data.deleteRecords) localStorage.setItem('deleteRecords_V9_2', data.deleteRecords);
+      if (data.headerHistory) localStorage.setItem('headerHistory_V9_2', data.headerHistory);
+      location.reload();
     };
-    reader.readAsText(file);
+    reader.readAsText(e.target.files[0]);
   };
 });
 </script>
