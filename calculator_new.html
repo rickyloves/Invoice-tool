@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票控制台 V14.9 - Stable Core</title>
+  <title>发票控制台 V15.0 - Logic Fixed</title>
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <style>
     :root {
@@ -33,7 +33,7 @@
     /* 顶部标题栏 */
     .top-header { margin-bottom: 30px; display: flex; align-items: baseline; gap: 15px; }
     h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; color: #1d1d1f; }
-    .version-tag { font-size: 13px; font-weight: 600; color: var(--primary); background: rgba(0,113,227,0.1); padding: 4px 10px; border-radius: 20px;}
+    .version-tag { font-size: 13px; font-weight: 600; color: #fff; background: var(--primary); padding: 4px 10px; border-radius: 20px;}
 
     /* 三栏布局架构 */
     .layout-grid { 
@@ -167,7 +167,7 @@
 <div class="main-wrapper">
   <div class="top-header">
     <h1>发票智能计算控制台</h1>
-    <span class="version-tag">V14.9 STABLE</span>
+    <span class="version-tag">V15.0 LOGIC FIXED</span>
   </div>
 
   <div class="layout-grid">
@@ -275,7 +275,6 @@ function normalize(raw) {
 }
 const makeKey = o => o.order + '|' + o.amount;
 
-// 修复点1：添加缺失的洗牌算法，这对于复杂条件下的重试至关重要
 function shuffleArray(array) {
   let currentIndex = array.length, randomIndex;
   while (currentIndex != 0) {
@@ -286,7 +285,6 @@ function shuffleArray(array) {
   return array;
 }
 
-// 修复点2：恢复 loadInventory 函数，用于初始化和重置
 async function loadInventory(forceReset = false) {
   if (!forceReset) {
     const local = JSON.parse(localStorage.getItem('invoiceInventory_V9_2') || 'null');
@@ -317,7 +315,6 @@ function renderStats() {
     if (!inventory || inventory.length === 0) { el.innerHTML = '<div style="padding:15px; color:#999; text-align:center;">暂无库存</div>'; return; }
     const total = inventory.reduce((a, b) => a + b.amount, 0);
     const count = inventory.length;
-    // 找出最大最小单张金额
     const amounts = inventory.map(x => x.amount);
     const minA = Math.min(...amounts);
     const maxA = Math.max(...amounts);
@@ -366,7 +363,7 @@ function renderDeleteRecords() {
   });
 }
 
-/* ====== 算法核心 (V9.6 Stable Engine) ====== */
+/* ====== 核心逻辑 V15.0 - The User's Logic (Merge Strategy) ====== */
 function selectOrdersByDP(target, maxSingle, allowApprox, onlyHigher, minOrderStr, maxOrderStr, usePool) {
   let pool = usePool.slice();
   if (minOrderStr) pool = pool.filter(o => o.order >= minOrderStr);
@@ -397,6 +394,7 @@ function selectOrdersByDP(target, maxSingle, allowApprox, onlyHigher, minOrderSt
 }
 
 function splitWithCapBacktrack(selectedOrders, minS, maxS, maxSame) {
+  // 原有逻辑保持不变，用于处理“相同金额数量限制”等复杂场景
   if (!(minS > 0) && !(maxS > 0)) { return [{ sum: selectedOrders.reduce((a, o) => a + o.amount, 0), orders: selectedOrders.slice() }]; }
   const lo = minS || 1, hi = maxS || selectedOrders.reduce((a, o) => a + o.amount, 0);
   let avail = selectedOrders.slice(); const capMap = new Map();
@@ -417,7 +415,7 @@ function splitWithCapBacktrack(selectedOrders, minS, maxS, maxSame) {
       if (isFinite(maxSame) && (capMap.get(s) || 0) >= maxSame) continue;
       const probe = bestSubsetInRange(av, s, s); if (probe) { cands.push(probe); if (cands.length >= 8) break; }
     }
-    if (cands.length === 0) { // Fallback check
+    if (cands.length === 0) { 
         const p = bestSubsetInRange(av, lo, hi);
         if (p && (!isFinite(maxSame) || (capMap.get(p.sum)||0) < maxSame)) cands.push(p);
     }
@@ -433,62 +431,57 @@ function splitWithCapBacktrack(selectedOrders, minS, maxS, maxSame) {
   return dfs(avail);
 }
 
-function splitFixedCount(selectedOrders, minS, maxS, k) {
-  const lo = minS || 1, hi = maxS || selectedOrders.reduce((a, o) => a + o.amount, 0);
-  const total = selectedOrders.reduce((a, o) => a + o.amount, 0);
-  const base = selectedOrders.map((o, idx) => ({ ...o, __uid: 'u' + idx }));
-  
-  function bestSubsetInRangeEx(avail, lo, hi) {
-    const maxSum = Math.min(hi, avail.reduce((a, o) => a + o.amount, 0));
-    const dp = Array(maxSum + 1).fill(null); dp[0] = { cnt: 0, picks: [] };
-    for (let i = 0; i < avail.length; i++) {
-      const a = avail[i].amount | 0;
-      for (let s = maxSum; s >= a; s--) { if (dp[s - a] && (!dp[s] || dp[s - a].cnt + 1 < dp[s].cnt)) { dp[s] = { cnt: dp[s - a].cnt + 1, picks: dp[s - a].picks.concat(i) }; } }
+// 核心更新：使用【合并归纳法】替代递归切割，实现“把8张票合并成6张”的直觉逻辑
+function splitFixedCount(selectedOrders, minS, maxS, targetCount) {
+  // 1. 初始化：把每个订单看作一个独立的发票包
+  let currentBundles = selectedOrders.map(o => ({
+    sum: o.amount,
+    orders: [o]
+  }));
+
+  // 如果初始订单数少于要求张数，物理上无法拆分（除非切订单），直接放弃
+  if (currentBundles.length < targetCount) return null;
+
+  // 2. 循环合并，直到数量等于目标张数
+  while (currentBundles.length > targetCount) {
+    // 排序：总是尝试合并最小的两个包，这样最不容易超过 maxS 上限
+    currentBundles.sort((a, b) => a.sum - b.sum);
+
+    const smallest = currentBundles[0];
+    let bestPartnerIdx = -1;
+
+    // 在剩余的包里找一个能合并的
+    for (let i = 1; i < currentBundles.length; i++) {
+        const partner = currentBundles[i];
+        if (maxS === 0 || (smallest.sum + partner.sum <= maxS)) {
+            bestPartnerIdx = i;
+            break; // 找到第一个能合的就行（贪心算法）
+        }
     }
-    for (let s = maxSum; s >= Math.max(1, lo); s--) { if (dp[s] && s >= lo && s <= hi) return { sum: s, picks: dp[s].picks }; }
-    return null;
+
+    if (bestPartnerIdx !== -1) {
+        // 执行合并
+        const partner = currentBundles[bestPartnerIdx];
+        const newBundle = {
+            sum: smallest.sum + partner.sum,
+            orders: smallest.orders.concat(partner.orders)
+        };
+        // 移除这两个旧包，加入新包
+        currentBundles.splice(bestPartnerIdx, 1); // 先移除后面的索引
+        currentBundles.shift(); // 再移除第0个
+        currentBundles.push(newBundle);
+    } else {
+        // 如果连最小的包都找不到人合并（因为都会超限），说明这组数据真的没法合并到目标张数
+        return null;
+    }
   }
   
-  // 增加 Memoization 防止递归过深卡死
-  const memo = new Map();
-  function sig(remT, k, avail) {
-      // 简单签名：剩余金额|剩余张数|剩余订单数(近似)
-      return remT + '|' + k + '|' + avail.length;
+  // 3. 检查单笔下限（如果有配置）
+  if (minS > 0) {
+      if (currentBundles.some(b => b.sum < minS)) return null;
   }
 
-  function dfs(remT, k, avail) {
-    const key = sig(remT, k, avail);
-    // if (memo.has(key)) return memo.get(key); // 过于严格的缓存可能会影响结果，暂且注释，若太慢可开启
-
-    if (k === 1) {
-      const dp = Array(remT + 1).fill(null); dp[0] = [];
-      for (let i = 0; i < avail.length; i++) {
-        const a = avail[i].amount | 0;
-        for (let s = remT; s >= a; s--) { if (dp[s - a] != null && dp[s] == null) { dp[s] = dp[s - a].concat(i); } }
-      }
-      if (!dp[remT]) return null;
-      const pick = dp[remT].map(i => avail[i]);
-      if (remT < lo || remT > hi) return null;
-      return [{ sum: remT, orders: pick.map(x => ({ order: x.order, amount: x.amount })) }];
-    }
-    const upper = Math.min(hi, remT - (k - 1) * lo);
-    const lower = Math.max(lo, remT - (k - 1) * hi);
-    if (lower > upper) return null;
-    const first = bestSubsetInRangeEx(avail, lower, upper);
-    if (!first) return null;
-    const trySubs = [];
-    for (let s = first.sum; s >= lower && trySubs.length < 8; s--) {
-      const t = bestSubsetInRangeEx(avail, s, s); if (t) trySubs.push(t);
-    }
-    for (const cand of trySubs) {
-      const pick = cand.picks.map(i => avail[i]); const used = new Set(pick.map(x => x.__uid));
-      const rest = avail.filter(x => !used.has(x.__uid));
-      const sub = dfs(remT - cand.sum, k - 1, rest);
-      if (sub) return [{ sum: cand.sum, orders: pick.map(x => ({ order: x.order, amount: x.amount })) }, ...sub];
-    }
-    return null;
-  }
-  return dfs(total, k, base);
+  return currentBundles;
 }
 
 /* ====== 系统交互绑定 ====== */
@@ -511,7 +504,7 @@ window.recoverBatch = function(batchIdx) {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
-  await loadInventory(); // 正确调用初始化
+  await loadInventory(); 
   renderHeaderHistory(); 
   renderDeleteRecords();
 
@@ -540,20 +533,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     setTimeout(async () => {
         let attempt = 0, success = null;
-        const startTime = Date.now();
         
         while (attempt < 2000) {
             attempt++; 
-            retryTxt.textContent = `正在计算方案... (尝试次数: ${attempt} / 2000)`;
+            retryTxt.textContent = `智能计算中... (尝试方案: ${attempt} / 2000)`;
             
             let pool = inventory.slice(); 
-            // 关键修复：如果第一次尝试失败，后续尝试必须打乱顺序，否则永远算不出来
             if (attempt > 1) shuffleArray(pool); 
             
             const pick = selectOrdersByDP(tgt, maxS, document.getElementById('allow-approx').checked, document.getElementById('only-higher').checked, document.getElementById('filter-order-min').value, document.getElementById('filter-order-max').value, pool);
             
             if (pick) {
-                let invs = (ic > 0) ? splitFixedCount(pick.orders, minS, maxS, ic) : splitWithCapBacktrack(pick.orders, minS, maxS, msc);
+                // 如果只指定了“目标金额”，没指定“张数”，走老逻辑
+                // 如果指定了“张数”，走新的“合并归纳”逻辑
+                let invs = null;
+                if (ic > 0) {
+                    invs = splitFixedCount(pick.orders, minS, maxS, ic);
+                } else {
+                    invs = splitWithCapBacktrack(pick.orders, minS, maxS, msc);
+                }
+
                 if (invs && Math.abs(invs.reduce((a,b)=>a+b.sum,0) - pick.sum) < 0.01) { success = invs; break; }
             }
             if (attempt % 50 === 0) await new Promise(r => setTimeout(r, 0));
@@ -562,7 +561,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadEl.style.display = 'none';
         
         if (!success) {
-            outEl.textContent = `SYSTEM INFO: 计算完成，未找到满足条件的组合。\n已尝试 ${attempt} 种随机路径。\n建议：\n1. 检查库存总额是否充足\n2. 放宽“单笔最小/最大”限制\n3. 减少“要求张数”限制`;
+            outEl.textContent = `SYSTEM INFO: 计算完成，未找到满足条件的组合。\n已尝试 ${attempt} 种随机路径。\n建议：\n1. 检查库存总额是否充足\n2. 放宽“单笔最小/最大”限制\n3. 如果张数要求过少，可能无法合并成功（单张会超上限）`;
         } else {
             const out = []; 
             success.forEach((inv, i) => {
