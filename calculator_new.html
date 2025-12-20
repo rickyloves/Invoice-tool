@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票控制台 V16.3 - Final Dashboard</title>
+  <title>发票控制台 V16.4 - Baseline Alignment</title>
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <style>
     :root {
@@ -25,36 +25,39 @@
     body {
       background: var(--bg-gradient); background-attachment: fixed;
       color: var(--text-main); font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      /* 页面本身允许滚动，防止小屏幕内容截断，但大屏幕下内容是固定的 */
       min-height: 100vh;
-      padding-bottom: 140px; 
+      padding-bottom: 120px; 
       display: flex; flex-direction: column;
     }
 
     .main-wrapper { 
         width: 96%; max-width: 1600px; margin: 25px auto; 
-        flex: 1; 
+        flex: 1; display: flex; flex-direction: column;
     }
     
     .top-header { 
-        margin-bottom: 20px; display: flex; align-items: center; gap: 15px; 
+        margin-bottom: 20px; display: flex; align-items: center; gap: 15px; flex-shrink: 0;
     }
     h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; color: #1d1d1f; }
     .version-tag { font-size: 12px; font-weight: 500; color: var(--text-sub); background: rgba(0,0,0,0.05); padding: 4px 10px; border-radius: 12px;}
 
-    /* 核心布局：三栏强制高度对齐 */
+    /* === V16.4 核心布局策略 === */
     .layout-grid { 
       display: grid; 
       grid-template-columns: 340px 1fr 340px; 
       gap: 24px; 
-      align-items: stretch; /* 关键：左中右高度一致 */
+      /* 关键：stretch 强制三列高度一致，以最高的列（中栏）为准 */
+      align-items: stretch; 
     }
 
     /* 列容器 */
     .column-col { 
         display: flex; flex-direction: column; gap: 24px; 
+        /* 关键：防止 flex 子项无限撑开容器，必须设置 min-height: 0 */
+        min-height: 0; 
     }
 
+    /* 响应式 */
     @media (max-width: 1200px) { .layout-grid { grid-template-columns: 320px 1fr; } #col-right { display: none; } }
 
     .glass-card {
@@ -65,11 +68,22 @@
       transition: transform 0.2s;
     }
     
-    /* === V16.3 关键类 === */
-    /* 1. 自动拉伸卡片：填满列的剩余空间 */
-    .card-stretch { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-    /* 2. 固定高度卡片 */
-    .card-fixed { flex-shrink: 0; }
+    /* === 卡片行为定义 === */
+    
+    /* 1. 固定高度卡片 (用于配置、修正、库存、维护) */
+    .card-fixed { 
+        flex-shrink: 0; /* 禁止缩小 */
+    }
+
+    /* 2. 弹性伸缩卡片 (用于抬头、删除记录) */
+    /* 它们会占据列中剩余的所有空间，不多也不少 */
+    .card-stretch { 
+        flex: 1; 
+        min-height: 0; /* 允许被压缩，防止内容撑爆页面 */
+        display: flex; 
+        flex-direction: column; 
+        overflow: hidden; /* 关键：超出部分隐藏，转为内部滚动 */
+    }
 
     .card-title { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .card-title::after { content: ""; flex: 1; height: 1px; background: rgba(0,0,0,0.06); margin-left: 10px; }
@@ -81,27 +95,28 @@
     }
     input:focus, textarea:focus { background: #fff; border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(0,113,227,0.15); }
     
-    /* === V16.3 修正：锁定结果区高度，开启滚动条 === */
+    /* === 中栏控制 === */
+    /* 结果区：固定高度 580px，作为全页面的定海神针 */
     #result-output {
       font-family: "SF Mono", Menlo, Monaco, monospace; font-size: 14px; line-height: 1.7;
       background: rgba(255,255,255,0.7); padding: 25px; border-radius: 16px; 
-      height: 580px; /* 固定高度，不再无限延伸 */
-      overflow-y: auto; /* 内部滚动 */
+      height: 580px; /* 绝对固定高度 */
+      overflow-y: auto; /* 内容多时内部滚动 */
       white-space: pre-wrap; border: 1px solid rgba(255,255,255,0.9); color: #333;
     }
 
-    /* 内部滚动盒子：用于抬头历史和删除记录 */
+    /* === 内部滚动容器 === */
+    /* 用于抬头管理和删除记录列表 */
     .inner-scroll-box {
-        flex: 1; /* 占满卡片剩余部分 */
-        overflow-y: auto; /* 开启滚动 */
+        flex: 1; /* 填满卡片 */
+        overflow-y: auto; /* 开启垂直滚动 */
         padding-right: 5px;
-        min-height: 100px;
     }
-    
-    /* 滚动条美化 */
+    /* 滚动条样式 */
     #result-output::-webkit-scrollbar, .inner-scroll-box::-webkit-scrollbar { width: 5px; }
     #result-output::-webkit-scrollbar-thumb, .inner-scroll-box::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
 
+    /* 抬头输入框：固定高度，不伸缩 */
     .textarea-header { resize: none; margin-bottom: 12px; height: 80px; flex-shrink: 0; }
 
     .flex-grid { display: flex; gap: 12px; margin-bottom: 8px; }
@@ -188,14 +203,14 @@
 
 <div id="loading-overlay">
   <div class="spinner"></div>
-  <p style="margin-top:20px; font-weight:600; font-size:15px; color:#333;">正在计算方案...</p>
-  <p id="retry-count" style="font-family:monospace; color:var(--text-sub); margin-top:8px; font-size:13px;">...</p>
+  <p style="margin-top:20px; font-weight:600; font-size:15px; color:#333;">正在进行智能组合计算...</p>
+  <p id="retry-count" style="font-family:monospace; color:var(--text-sub); margin-top:8px; font-size:13px;">初始化中...</p>
 </div>
 
 <div class="main-wrapper">
   <div class="top-header">
     <h1>发票智能计算控制台</h1>
-    <span class="version-tag">V16.3 Final</span>
+    <span class="version-tag">V16.4 Baseline Alignment</span>
   </div>
 
   <div class="layout-grid">
