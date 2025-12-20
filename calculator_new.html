@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票控制台 V15.3 - Compact Layout</title>
+  <title>发票控制台 V15.4 - Perfect Layout</title>
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <style>
     :root {
@@ -21,65 +21,86 @@
     input[type=number] { -moz-appearance: textfield; }
 
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+    
     body {
       background: var(--bg-gradient); background-attachment: fixed;
       color: var(--text-main); font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      padding-bottom: 110px; min-height: 100vh;
+      /* 关键：使用视口高度控制，防止页面过长，适合 MacBook Air 一屏流 */
+      height: 100vh; 
+      overflow: hidden; /* 防止最外层滚动，内容在卡片内滚动 */
+      display: flex; flex-direction: column;
     }
 
-    .main-wrapper { width: 96%; max-width: 1600px; margin: 25px auto; }
+    .main-wrapper { 
+        width: 96%; max-width: 1600px; margin: 0 auto; 
+        flex: 1; display: flex; flex-direction: column;
+        padding-top: 20px; padding-bottom: 90px; /* 留出底部空间 */
+    }
     
-    .top-header { margin-bottom: 20px; display: flex; align-items: center; gap: 15px; }
+    .top-header { 
+        flex-shrink: 0; margin-bottom: 15px; display: flex; align-items: center; gap: 15px; 
+    }
     h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; color: #1d1d1f; }
     .version-tag { font-size: 12px; font-weight: 500; color: var(--text-sub); background: rgba(0,0,0,0.05); padding: 4px 10px; border-radius: 12px;}
 
-    /* V15.3 核心布局修改：取消 stretch，改为 start，让高度自然流动 */
+    /* V15.4 核心布局：全屏填充网格 */
     .layout-grid { 
       display: grid; 
       grid-template-columns: 340px 1fr 340px; 
       gap: 20px; 
-      align-items: start; /* 关键：不再强制拉伸高度 */
+      flex: 1; /* 占据剩余垂直空间 */
+      min-height: 0; /* 允许 flex 子项收缩 */
     }
 
-    .column-side { display: flex; flex-direction: column; gap: 20px; }
-    
-    /* 中间列：确保结果区有足够的最小高度，作为视觉重心 */
-    .column-center { display: flex; flex-direction: column; }
+    /* 通用列样式：Flex 纵向布局 */
+    .column-col { 
+        display: flex; flex-direction: column; gap: 20px; 
+        height: 100%; /* 撑满网格高度 */
+        min-height: 0;
+    }
 
-    @media (max-width: 1200px) { .layout-grid { grid-template-columns: 320px 1fr; } .column-right { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; } }
-    @media (max-width: 900px) { .layout-grid { grid-template-columns: 1fr; } .column-right { display: flex; flex-direction: column; } }
+    /* 响应式 */
+    @media (max-width: 1200px) { .layout-grid { grid-template-columns: 320px 1fr; } .column-right { display: none; /* 小屏暂隐右栏或另行处理 */ } }
 
     .glass-card {
       background: var(--glass); backdrop-filter: blur(var(--blur)); -webkit-backdrop-filter: blur(var(--blur));
-      border: 1px solid var(--glass-border); border-radius: 20px; padding: 22px;
+      border: 1px solid var(--glass-border); border-radius: 20px; padding: 20px;
       box-shadow: 0 8px 25px rgba(0,0,0,0.03); 
-      transition: transform 0.2s, box-shadow 0.2s;
+      display: flex; flex-direction: column;
+      transition: transform 0.2s;
     }
-    .glass-card:hover { transform: translateY(-2px); box-shadow: 0 12px 35px rgba(0,0,0,0.06); }
+    
+    /* 关键类：让卡片自动填充剩余高度 */
+    .card-grow { flex: 1; min-height: 0; } 
+    /* 关键类：固定高度卡片，不伸缩 */
+    .card-fixed { flex-shrink: 0; }
 
-    .card-title { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; }
+    .card-title { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .card-title::after { content: ""; flex: 1; height: 1px; background: rgba(0,0,0,0.06); margin-left: 10px; }
 
-    label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sub); margin-bottom: 6px; margin-top: 12px; }
+    label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sub); margin-bottom: 6px; margin-top: 10px; }
     input, textarea {
       width: 100%; border: 1px solid rgba(0,0,0,0.1); border-radius: 10px;
       padding: 10px 12px; font-size: 14px; background: rgba(255,255,255,0.7); transition: all 0.2s;
     }
     input:focus, textarea:focus { background: #fff; border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(0,113,227,0.15); }
-    textarea { resize: vertical; }
-
-    /* 中间结果区：独立高度控制 */
+    
+    /* 结果区：撑满卡片 */
     #result-output {
       font-family: "SF Mono", Menlo, Monaco, monospace; font-size: 14px; line-height: 1.7;
-      background: rgba(255,255,255,0.7); padding: 25px; border-radius: 16px; 
-      min-height: 600px; /* 保证视觉重心 */
+      background: rgba(255,255,255,0.7); padding: 20px; border-radius: 16px; 
+      flex: 1; overflow-y: auto; /* 内部滚动 */
       white-space: pre-wrap; border: 1px solid rgba(255,255,255,0.9); color: #333;
     }
+
+    /* 文本域撑满 */
+    .textarea-fill { flex: 1; resize: none; margin-bottom: 10px; }
 
     .flex-grid { display: flex; gap: 10px; margin-bottom: 8px; }
     .flex-grid > div { flex: 1; }
 
-    .stat-row { display: flex; gap: 10px; }
+    /* 统计仪表盘 */
+    .stat-row { display: flex; gap: 10px; margin-bottom: 0 !important; }
     .stat-box {
       flex: 1; background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(255,255,255,0.5)); 
       padding: 12px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.8);
@@ -87,10 +108,9 @@
     .stat-box b { display: block; font-size: 18px; font-weight: 800; color: var(--primary); letter-spacing: -0.5px; }
     .stat-box span { font-size: 11px; color: var(--text-sub); font-weight: 600; }
 
-    /* V15.3 优化：限制删除记录的最大高度，不占用过多空间 */
+    /* 记录滚动区 */
     .record-scroll { 
-        max-height: 250px; /* 限制高度，内容多时滚动 */
-        overflow-y: auto; padding-right: 5px; min-height: 60px; 
+        flex: 1; overflow-y: auto; padding-right: 5px; min-height: 0;
     }
     .record-scroll::-webkit-scrollbar { width: 5px; }
     .record-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
@@ -145,11 +165,10 @@
     }
     #toast.show { transform: translateX(-50%) translateY(0); }
 
-    .history-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .history-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; /* 推到底部 */ }
     .chip { 
         background: #fff; padding: 6px 10px; border-radius: 10px; font-size: 12px; color: #555;
         border: 1px solid rgba(0,0,0,0.08); cursor: pointer; transition: all 0.2s; 
-        max-width: 100%; word-break: break-all; white-space: pre-wrap; line-height: 1.4;
     }
     .chip:hover { border-color: var(--primary); color: var(--primary); background: rgba(0,113,227,0.03); }
 
@@ -175,12 +194,13 @@
 <div class="main-wrapper">
   <div class="top-header">
     <h1>发票智能计算控制台</h1>
-    <span class="version-tag">V15.3 Compact</span>
+    <span class="version-tag">V15.4 Perfect Layout</span>
   </div>
 
   <div class="layout-grid">
-    <div class="column-side">
-      <div class="glass-card">
+    
+    <div class="column-col">
+      <div class="glass-card card-fixed">
         <div class="card-title">⚙️ 开票需求配置</div>
         <label style="margin-top:0;">目标开票总额</label>
         <input id="target-input" type="number" placeholder="输入金额..." style="font-size: 24px; font-weight: 700; color:var(--primary); padding: 14px; background:rgba(0,113,227,0.05); border:1px solid rgba(0,113,227,0.15);">
@@ -203,28 +223,33 @@
         </div>
       </div>
 
-      <div class="glass-card">
-        <div class="card-title">📊 实时库存</div>
-        <div id="inventory-stats"></div>
-      </div>
-
-      <div class="glass-card">
+      <div class="glass-card card-grow">
         <div class="card-title">📑 抬头管理</div>
-        <textarea id="company-header" rows="3" placeholder="在此粘贴抬头及税号信息..."></textarea>
+        <textarea id="company-header" class="textarea-fill" placeholder="在此粘贴抬头及税号信息..."></textarea>
         <div id="header-history" class="history-chips"></div>
       </div>
     </div>
 
-    <div class="column-center">
-      <div class="glass-card" style="height: 100%; padding: 25px;">
-        <div class="card-title" style="margin-bottom:15px;">📋 计算结果 / 建议方案</div>
+    <div class="column-col">
+      <div class="glass-card card-grow">
+        <div class="card-title">✨ 智能分票方案</div>
         <div id="result-output">请在左侧设置目标金额，然后点击底部“执行智能计算”按钮。</div>
+      </div>
+
+      <div class="glass-card card-fixed">
+        <div class="card-title">📊 实时库存状态</div>
+        <div id="inventory-stats"></div>
       </div>
     </div>
 
-    <div class="column-side">
-      <div class="glass-card">
-        <div class="card-title">🛠 快捷检索修正</div>
+    <div class="column-col">
+      <div class="glass-card card-grow" style="flex-grow: 1.2;">
+        <div class="card-title">🗑 已删除记录 (可恢复)</div>
+        <div id="record-list" class="record-scroll"></div>
+      </div>
+
+      <div class="glass-card card-fixed">
+        <div class="card-title">🛠 快捷订单修正</div>
         <div class="flex-grid" style="margin-bottom:12px; gap:10px;">
             <input id="search-order-input" type="text" placeholder="输入订单号..." style="padding:10px;">
             <button id="btn-search-order" style="width:70px; background:var(--primary); color:white; border-radius:12px; font-size:13px;">查询</button>
@@ -232,21 +257,17 @@
         <div id="edit-result-area"></div>
       </div>
 
-      <div class="glass-card">
+      <div class="glass-card card-fixed">
         <div class="card-title">📦 数据维护</div>
         <div class="flex-grid">
-          <button id="backup-btn" class="footer-btn" style="flex:1; justify-content:center; background:rgba(0,0,0,0.03); font-size:13px;">📤 导出数据</button>
-          <button id="restore-btn" class="footer-btn" style="flex:1; justify-content:center; background:rgba(0,0,0,0.03); font-size:13px;">📥 恢复备份</button>
+          <button id="backup-btn" class="footer-btn" style="flex:1; justify-content:center; background:rgba(0,0,0,0.03); font-size:13px;">📤 导出</button>
+          <button id="restore-btn" class="footer-btn" style="flex:1; justify-content:center; background:rgba(0,0,0,0.03); font-size:13px;">📥 恢复</button>
         </div>
-        <button id="reset-btn" class="footer-btn" style="width:100%; margin-top:10px; padding:10px; justify-content:center; color:var(--danger); border:1px dashed rgba(255,59,48,0.2); background:none; font-size:12px;">🔄 重置所有数据</button>
+        <button id="reset-btn" class="footer-btn" style="width:100%; margin-top:10px; padding:10px; justify-content:center; color:var(--danger); border:1px dashed rgba(255,59,48,0.2); background:none; font-size:12px;">🔄 重置系统</button>
         <input type="file" id="restore-input" style="display:none" accept=".json">
       </div>
-
-      <div class="glass-card">
-        <div class="card-title">🗑 已删除记录 (可恢复)</div>
-        <div id="record-list" class="record-scroll"></div>
-      </div>
     </div>
+
   </div>
 </div>
 
@@ -330,11 +351,9 @@ function renderStats() {
     const maxA = Math.max(...amounts) || 0;
     
     el.innerHTML = `
-        <div class="stat-row" style="margin-bottom:8px;">
+        <div class="stat-row">
             <div class="stat-box"><b>${total.toLocaleString()}</b><span>库存总额</span></div>
             <div class="stat-box"><b>${count}</b><span>可用单数</span></div>
-        </div>
-        <div class="stat-row">
             <div class="stat-box"><b>${minA}</b><span>最小单张</span></div>
             <div class="stat-box"><b>${maxA}</b><span>最大单张</span></div>
         </div>
