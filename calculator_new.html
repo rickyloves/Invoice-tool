@@ -2,13 +2,13 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票控制台 V16.4 - Baseline Alignment</title>
+  <title>发票控制台 V16.6 - Fixed Anchor Layout</title>
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <style>
     :root {
       --primary: #0071e3;
       --bg-gradient: linear-gradient(150deg, #f2f5f9 0%, #dbeafe 100%);
-      --glass: rgba(255, 255, 255, 0.9);
+      --glass: rgba(255, 255, 255, 0.95);
       --glass-border: rgba(255, 255, 255, 0.6);
       --text-main: #1d1d1f;
       --text-sub: #6e6e73;
@@ -26,35 +26,35 @@
       background: var(--bg-gradient); background-attachment: fixed;
       color: var(--text-main); font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       min-height: 100vh;
-      padding-bottom: 120px; 
+      padding-bottom: 120px; /* 给底部悬浮栏留位 */
       display: flex; flex-direction: column;
     }
 
     .main-wrapper { 
-        width: 96%; max-width: 1600px; margin: 25px auto; 
-        flex: 1; display: flex; flex-direction: column;
+        width: 96%; max-width: 1650px; margin: 25px auto; 
+        /* 不设高度，高度由内容决定，但通过 Grid 强制列等高 */
+        display: flex; 
+        flex-direction: column;
     }
     
     .top-header { 
-        margin-bottom: 20px; display: flex; align-items: center; gap: 15px; flex-shrink: 0;
+        margin-bottom: 20px; display: flex; align-items: center; gap: 15px; 
     }
     h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; color: #1d1d1f; }
-    .version-tag { font-size: 12px; font-weight: 500; color: var(--text-sub); background: rgba(0,0,0,0.05); padding: 4px 10px; border-radius: 12px;}
+    .version-tag { font-size: 12px; font-weight: 500; color: #fff; background: var(--primary); padding: 4px 10px; border-radius: 12px;}
 
-    /* === V16.4 核心布局策略 === */
+    /* === V16.6 核心布局：强制对齐 === */
     .layout-grid { 
       display: grid; 
       grid-template-columns: 340px 1fr 340px; 
       gap: 24px; 
-      /* 关键：stretch 强制三列高度一致，以最高的列（中栏）为准 */
+      /* 关键：让左栏和右栏的高度，强制拉伸至与最高的栏（中栏）相等 */
       align-items: stretch; 
     }
 
-    /* 列容器 */
+    /* 列容器：Flex 垂直排列 */
     .column-col { 
-        display: flex; flex-direction: column; gap: 24px; 
-        /* 关键：防止 flex 子项无限撑开容器，必须设置 min-height: 0 */
-        min-height: 0; 
+        display: flex; flex-direction: column; gap: 20px; 
     }
 
     /* 响应式 */
@@ -68,21 +68,46 @@
       transition: transform 0.2s;
     }
     
-    /* === 卡片行为定义 === */
-    
-    /* 1. 固定高度卡片 (用于配置、修正、库存、维护) */
+    /* === 核心高度控制类 === */
+
+    /* 1. 固定高度卡片 (Fixed) */
+    /* 用于：配置区、修正区、库存区、维护区 */
     .card-fixed { 
-        flex-shrink: 0; /* 禁止缩小 */
+        flex-shrink: 0; /* 禁止被压缩 */
     }
 
-    /* 2. 弹性伸缩卡片 (用于抬头、删除记录) */
-    /* 它们会占据列中剩余的所有空间，不多也不少 */
-    .card-stretch { 
-        flex: 1; 
-        min-height: 0; /* 允许被压缩，防止内容撑爆页面 */
-        display: flex; 
-        flex-direction: column; 
-        overflow: hidden; /* 关键：超出部分隐藏，转为内部滚动 */
+    /* 2. 结果区专用固定 (Anchor) */
+    /* 它决定了中栏的总高度，进而决定了全页面的基准高度 */
+    .card-result-anchor {
+        height: 580px; /* 死死固定 */
+        flex-shrink: 0;
+        display: flex; flex-direction: column;
+    }
+
+    /* 3. 自动填充卡片 (Fill) */
+    /* 用于：抬头管理、删除记录 */
+    /* 它们会自动伸长，去填满由于对齐中栏而产生的空白 */
+    .card-fill { 
+        flex: 1; /* 占据剩余所有空间 */
+        display: flex; flex-direction: column;
+        min-height: 0; /* 允许 flex 容器计算高度 */
+    }
+
+    /* === 内部滚动控制 === */
+    /* 所有需要滚动的区域都套用这个 */
+    .scroll-content {
+        flex: 1; /* 填满父容器 */
+        overflow-y: auto; /* 开启滚动 */
+        padding-right: 6px;
+    }
+    
+    /* 滚动条美化 */
+    .scroll-content::-webkit-scrollbar { width: 5px; }
+    .scroll-content::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
+
+    /* 结果区文字容器 */
+    #result-output {
+        white-space: pre-wrap; color: #333; font-family: "SF Mono", monospace; font-size: 14px; line-height: 1.7;
     }
 
     .card-title { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
@@ -95,28 +120,6 @@
     }
     input:focus, textarea:focus { background: #fff; border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(0,113,227,0.15); }
     
-    /* === 中栏控制 === */
-    /* 结果区：固定高度 580px，作为全页面的定海神针 */
-    #result-output {
-      font-family: "SF Mono", Menlo, Monaco, monospace; font-size: 14px; line-height: 1.7;
-      background: rgba(255,255,255,0.7); padding: 25px; border-radius: 16px; 
-      height: 580px; /* 绝对固定高度 */
-      overflow-y: auto; /* 内容多时内部滚动 */
-      white-space: pre-wrap; border: 1px solid rgba(255,255,255,0.9); color: #333;
-    }
-
-    /* === 内部滚动容器 === */
-    /* 用于抬头管理和删除记录列表 */
-    .inner-scroll-box {
-        flex: 1; /* 填满卡片 */
-        overflow-y: auto; /* 开启垂直滚动 */
-        padding-right: 5px;
-    }
-    /* 滚动条样式 */
-    #result-output::-webkit-scrollbar, .inner-scroll-box::-webkit-scrollbar { width: 5px; }
-    #result-output::-webkit-scrollbar-thumb, .inner-scroll-box::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
-
-    /* 抬头输入框：固定高度，不伸缩 */
     .textarea-header { resize: none; margin-bottom: 12px; height: 80px; flex-shrink: 0; }
 
     .flex-grid { display: flex; gap: 12px; margin-bottom: 8px; }
@@ -204,13 +207,13 @@
 <div id="loading-overlay">
   <div class="spinner"></div>
   <p style="margin-top:20px; font-weight:600; font-size:15px; color:#333;">正在进行智能组合计算...</p>
-  <p id="retry-count" style="font-family:monospace; color:var(--text-sub); margin-top:8px; font-size:13px;">初始化中...</p>
+  <p id="retry-count" style="font-family:monospace; color:var(--text-sub); margin-top:8px; font-size:13px;">...</p>
 </div>
 
 <div class="main-wrapper">
   <div class="top-header">
     <h1>发票智能计算控制台</h1>
-    <span class="version-tag">V16.4 Baseline Alignment</span>
+    <span class="version-tag">V16.6 Anchor Fixed</span>
   </div>
 
   <div class="layout-grid">
@@ -239,17 +242,17 @@
         </div>
       </div>
 
-      <div class="glass-card card-stretch">
+      <div class="glass-card card-fill">
         <div class="card-title">📑 抬头管理 (自动保存)</div>
         <textarea id="company-header" class="textarea-header" placeholder="在此粘贴抬头及税号信息..."></textarea>
-        <div id="header-history" class="inner-scroll-box"></div>
+        <div id="header-history" class="scroll-content"></div>
       </div>
     </div>
 
     <div class="column-col" id="col-center">
-      <div class="glass-card card-fixed">
+      <div class="glass-card card-result-anchor">
         <div class="card-title">✨ 智能组合结果</div>
-        <div id="result-output">请在左侧设置目标金额，然后点击底部“执行智能计算”按钮。</div>
+        <div id="result-output" class="scroll-content">请在左侧设置目标金额，然后点击底部“执行智能计算”按钮。</div>
       </div>
 
       <div class="glass-card card-fixed">
@@ -268,9 +271,9 @@
     </div>
 
     <div class="column-col" id="col-right">
-      <div class="glass-card card-stretch">
+      <div class="glass-card card-fill">
         <div class="card-title">🗑 已删除记录 (可恢复)</div>
-        <div id="record-list" class="inner-scroll-box"></div>
+        <div id="record-list" class="scroll-content"></div>
       </div>
 
       <div class="glass-card card-fixed">
@@ -388,7 +391,6 @@ function renderHeaderHistory() {
   const div = document.getElementById('header-history'); if(!div) return; div.innerHTML = '';
   loadHeaderHistory().forEach((h, i) => {
     const chip = document.createElement('div'); chip.className = 'chip';
-    // 允许显示完整多行文本
     chip.innerHTML = `<span style="white-space:pre-wrap; line-height:1.3; flex:1;">${h}</span><span style="margin-left:10px; color:#ccc; font-size:14px;">✕</span>`;
     chip.onclick = () => document.getElementById('company-header').value = h;
     chip.querySelector('span:last-child').onclick = (e) => { 
@@ -420,7 +422,7 @@ function renderDeleteRecords() {
   }
 }
 
-/* ====== 核心逻辑 V15.1 (Fail-Fast + Merge) ====== */
+/* ====== 核心逻辑 V15.1 ====== */
 function selectOrdersByDP(target, maxSingle, allowApprox, onlyHigher, minOrderStr, maxOrderStr, usePool) {
   let pool = usePool.slice();
   if (minOrderStr) pool = pool.filter(o => o.order >= minOrderStr);
