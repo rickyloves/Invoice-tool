@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票控制台 V16.91 Aurora - LTS</title>
+  <title>发票控制台 V17 Aurora</title>
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <style>
     :root {
@@ -91,11 +91,10 @@
     .card-result-anchor { height: 580px; flex-shrink: 0; display: flex; flex-direction: column; }
     .card-fill { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 
-    /* V16.91 优化：板块标题字号加大，间距减小，维持面积平衡 */
     .card-title { 
-        font-size: 16px; /* 从 13px 提升到 16px */
+        font-size: 16px; 
         font-weight: 700; color: #333; 
-        margin-bottom: 12px; /* 从 15px 减小到 12px */
+        margin-bottom: 12px; 
         display: flex; align-items: center; gap: 8px; flex-shrink: 0; 
     }
     .card-title::after { content: ""; flex: 1; height: 1px; background: rgba(0,0,0,0.06); margin-left: 10px; }
@@ -103,14 +102,14 @@
     /* 通用标签样式 */
     label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sub); margin-bottom: 8px; margin-top: 12px; }
     
-    /* V16.91 优化：主标签字号微调，建立层级 */
+    /* V17 优化：增加顶部间距，实现视觉居中 */
     .main-label {
         display: block;
-        font-size: 14px; /* 从 15px 微调至 14px，介于标题(16)和普通标签(12)之间 */
+        font-size: 14px;
         font-weight: 700; 
         color: var(--text-main);
         margin-bottom: 10px;
-        margin-top: 0;
+        margin-top: 20px; /* 关键：增加顶部间距，与下方20px间距平衡 */
     }
 
     /* 通用输入框样式 */
@@ -121,12 +120,10 @@
     }
     input:hover, textarea:hover { border-color: rgba(0,113,227,0.4); background: rgba(255,255,255,0.9); }
     
-    /* V16.91 优化：全局统一的、更精致轻薄的聚焦光圈 */
     input:focus, textarea:focus { 
         background: #fff; 
         border-color: var(--primary); 
         outline: none; 
-        /* 将 shadow 扩散半径从 3px 减为 2px，并微调透明度 */
         box-shadow: 0 0 0 2px rgba(0,113,227,0.2); 
     }
     
@@ -154,6 +151,8 @@
     .textarea-header { resize: none; margin-bottom: 12px; height: 80px; flex-shrink: 0; }
 
     .flex-grid { display: flex; gap: 12px; margin-bottom: 8px; }
+    /* 下一行输入框的顶部间距在这里定义 (margin-top:20px) */
+    .flex-grid[style*="margin-top:20px"] { margin-top: 20px !important; } 
     .flex-grid > div { flex: 1; }
 
     .stat-row { display: flex; gap: 12px; margin-bottom: 0 !important; }
@@ -215,8 +214,12 @@
     .btn-del-confirm { background: var(--danger); color: white !important; }
     .btn-del-confirm:hover { background: #d70015; }
 
-    /* V16.91 优化：修复 Ready 字间距 */
-    .status-pill { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: #86868b; letter-spacing: normal; }
+    /* V17 优化：显式设置紧凑的字间距 */
+    .status-pill { 
+        display: flex; align-items: center; gap: 8px; 
+        font-size: 12px; font-weight: 600; color: #86868b; 
+        letter-spacing: -0.3px; /* 紧凑的苹果风格间距 */
+    }
     .dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; }
 
     #toast {
@@ -257,7 +260,7 @@
 <div class="main-wrapper">
   <div class="top-header">
     <h1>发票智能计算控制台</h1>
-    <span class="version-tag">V16.91 Aurora - LTS</span>
+    <span class="version-tag">V17 Aurora</span>
   </div>
 
   <div class="layout-grid">
