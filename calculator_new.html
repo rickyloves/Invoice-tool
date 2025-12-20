@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票控制台 V15.0 - Logic Fixed</title>
+  <title>发票控制台 V15.1 - Final Logic</title>
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <style>
     :root {
@@ -33,7 +33,7 @@
     /* 顶部标题栏 */
     .top-header { margin-bottom: 30px; display: flex; align-items: baseline; gap: 15px; }
     h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; color: #1d1d1f; }
-    .version-tag { font-size: 13px; font-weight: 600; color: #fff; background: var(--primary); padding: 4px 10px; border-radius: 20px;}
+    .version-tag { font-size: 13px; font-weight: 600; color: #fff; background: var(--success); padding: 4px 10px; border-radius: 20px;}
 
     /* 三栏布局架构 */
     .layout-grid { 
@@ -142,8 +142,13 @@
     #toast.show { transform: translateX(-50%) translateY(0); }
 
     .history-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-    .chip { background: #fff; padding: 6px 12px; border-radius: 20px; font-size: 12px; border: 1px solid rgba(0,0,0,0.05); cursor: pointer; transition: all 0.2s; }
-    .chip:hover { border-color: var(--primary); color: var(--primary); }
+    /* 修复：允许历史记录文字换行，不隐藏 */
+    .chip { 
+        background: #fff; padding: 8px 14px; border-radius: 12px; font-size: 12px; 
+        border: 1px solid rgba(0,0,0,0.05); cursor: pointer; transition: all 0.2s; 
+        max-width: 100%; word-break: break-all; white-space: pre-wrap; line-height: 1.4;
+    }
+    .chip:hover { border-color: var(--primary); color: var(--primary); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
 
     #loading-overlay {
       position: fixed; inset: 0; background: rgba(255,255,255,0.8); z-index: 2000;
@@ -167,7 +172,7 @@
 <div class="main-wrapper">
   <div class="top-header">
     <h1>发票智能计算控制台</h1>
-    <span class="version-tag">V15.0 LOGIC FIXED</span>
+    <span class="version-tag">V15.1 FINAL</span>
   </div>
 
   <div class="layout-grid">
@@ -336,7 +341,8 @@ function renderHeaderHistory() {
   const history = JSON.parse(localStorage.getItem('headerHistory_V9_2') || '[]');
   history.forEach((h, i) => {
     const chip = document.createElement('div'); chip.className = 'chip';
-    chip.innerHTML = `${h.length>10?h.substring(0,10)+'...':h} <span style="margin-left:5px; color:#ccc;">✕</span>`;
+    // V15.1 修复：移除所有 substring 截断，保留完整文本
+    chip.innerHTML = `${h} <span style="margin-left:5px; color:#ccc;">✕</span>`;
     chip.onclick = () => document.getElementById('company-header').value = h;
     chip.querySelector('span').onclick = (e) => { 
         e.stopPropagation(); history.splice(i, 1);
@@ -363,7 +369,7 @@ function renderDeleteRecords() {
   });
 }
 
-/* ====== 核心逻辑 V15.0 - The User's Logic (Merge Strategy) ====== */
+/* ====== 核心逻辑 V15.1 - 彻底修复卡死 (Fail-Fast Logic) ====== */
 function selectOrdersByDP(target, maxSingle, allowApprox, onlyHigher, minOrderStr, maxOrderStr, usePool) {
   let pool = usePool.slice();
   if (minOrderStr) pool = pool.filter(o => o.order >= minOrderStr);
@@ -394,7 +400,6 @@ function selectOrdersByDP(target, maxSingle, allowApprox, onlyHigher, minOrderSt
 }
 
 function splitWithCapBacktrack(selectedOrders, minS, maxS, maxSame) {
-  // 原有逻辑保持不变，用于处理“相同金额数量限制”等复杂场景
   if (!(minS > 0) && !(maxS > 0)) { return [{ sum: selectedOrders.reduce((a, o) => a + o.amount, 0), orders: selectedOrders.slice() }]; }
   const lo = minS || 1, hi = maxS || selectedOrders.reduce((a, o) => a + o.amount, 0);
   let avail = selectedOrders.slice(); const capMap = new Map();
@@ -431,52 +436,53 @@ function splitWithCapBacktrack(selectedOrders, minS, maxS, maxSame) {
   return dfs(avail);
 }
 
-// 核心更新：使用【合并归纳法】替代递归切割，实现“把8张票合并成6张”的直觉逻辑
+// V15.1 关键更新：逻辑安全锁 + 优先判断约束
 function splitFixedCount(selectedOrders, minS, maxS, targetCount) {
-  // 1. 初始化：把每个订单看作一个独立的发票包
-  let currentBundles = selectedOrders.map(o => ({
-    sum: o.amount,
-    orders: [o]
-  }));
+  // 1. 初始化
+  let currentBundles = selectedOrders.map(o => ({ sum: o.amount, orders: [o] }));
 
-  // 如果初始订单数少于要求张数，物理上无法拆分（除非切订单），直接放弃
   if (currentBundles.length < targetCount) return null;
 
-  // 2. 循环合并，直到数量等于目标张数
+  // 2. 循环合并，增加安全计数器防止无限循环
+  let safetyCounter = 0;
+  
   while (currentBundles.length > targetCount) {
-    // 排序：总是尝试合并最小的两个包，这样最不容易超过 maxS 上限
+    safetyCounter++;
+    if(safetyCounter > 500) return null; // 超过500次尝试合并还搞不定，说明这组数据有毒，直接Fail-Fast
+
     currentBundles.sort((a, b) => a.sum - b.sum);
 
     const smallest = currentBundles[0];
     let bestPartnerIdx = -1;
 
-    // 在剩余的包里找一个能合并的
+    // 优先寻找能合并且符合 MaxS 限制的
     for (let i = 1; i < currentBundles.length; i++) {
         const partner = currentBundles[i];
+        // 关键点：这里必须判断 maxS，如果合并后超限，绝对不能合！
         if (maxS === 0 || (smallest.sum + partner.sum <= maxS)) {
             bestPartnerIdx = i;
-            break; // 找到第一个能合的就行（贪心算法）
+            break; 
         }
     }
 
     if (bestPartnerIdx !== -1) {
-        // 执行合并
+        // 找到了合法的合并对象，执行合并
         const partner = currentBundles[bestPartnerIdx];
         const newBundle = {
             sum: smallest.sum + partner.sum,
             orders: smallest.orders.concat(partner.orders)
         };
-        // 移除这两个旧包，加入新包
-        currentBundles.splice(bestPartnerIdx, 1); // 先移除后面的索引
-        currentBundles.shift(); // 再移除第0个
+        currentBundles.splice(bestPartnerIdx, 1);
+        currentBundles.shift();
         currentBundles.push(newBundle);
     } else {
-        // 如果连最小的包都找不到人合并（因为都会超限），说明这组数据真的没法合并到目标张数
+        // 重点：遍历了一圈，发现最小的包和任何其他包合并都会超过 maxS。
+        // 这意味着这组订单完全不可能满足条件，不要再试了，直接返回 null。
+        // 触发外层洗牌，换一组订单。
         return null;
     }
   }
   
-  // 3. 检查单笔下限（如果有配置）
   if (minS > 0) {
       if (currentBundles.some(b => b.sum < minS)) return null;
   }
@@ -544,8 +550,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const pick = selectOrdersByDP(tgt, maxS, document.getElementById('allow-approx').checked, document.getElementById('only-higher').checked, document.getElementById('filter-order-min').value, document.getElementById('filter-order-max').value, pool);
             
             if (pick) {
-                // 如果只指定了“目标金额”，没指定“张数”，走老逻辑
-                // 如果指定了“张数”，走新的“合并归纳”逻辑
                 let invs = null;
                 if (ic > 0) {
                     invs = splitFixedCount(pick.orders, minS, maxS, ic);
