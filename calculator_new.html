@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票控制台 V16.9 Aurora - LTS</title>
+  <title>发票控制台 V16.91 Aurora - LTS</title>
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <style>
     :root {
@@ -41,14 +41,12 @@
     }
     h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; color: #1d1d1f; }
     
-    /* V16.9 优化：移除人为添加的 letter-spacing，回归苹果原生紧凑感 */
     .version-tag { 
         font-size: 12px; font-weight: 500; color: #86868b; 
         background: rgba(0,0,0,0.04); padding: 4px 10px; border-radius: 12px;
-        /* letter-spacing: 0.5px;  <-- 已移除 */
     }
 
-    /* === 布局架构：绝对定位对齐 (V16.7 核心) === */
+    /* === 布局架构：绝对定位对齐 === */
     .layout-grid { 
       display: grid; 
       grid-template-columns: 340px 1fr 340px; 
@@ -93,20 +91,26 @@
     .card-result-anchor { height: 580px; flex-shrink: 0; display: flex; flex-direction: column; }
     .card-fill { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 
-    .card-title { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    /* V16.91 优化：板块标题字号加大，间距减小，维持面积平衡 */
+    .card-title { 
+        font-size: 16px; /* 从 13px 提升到 16px */
+        font-weight: 700; color: #333; 
+        margin-bottom: 12px; /* 从 15px 减小到 12px */
+        display: flex; align-items: center; gap: 8px; flex-shrink: 0; 
+    }
     .card-title::after { content: ""; flex: 1; height: 1px; background: rgba(0,0,0,0.06); margin-left: 10px; }
 
     /* 通用标签样式 */
     label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sub); margin-bottom: 8px; margin-top: 12px; }
     
-    /* V16.9 新增：主标签样式 (用于目标金额) */
+    /* V16.91 优化：主标签字号微调，建立层级 */
     .main-label {
         display: block;
-        font-size: 15px; /* 加大字号 */
-        font-weight: 700; /* 加粗 */
-        color: var(--text-main); /* 使用深色主文本色 */
+        font-size: 14px; /* 从 15px 微调至 14px，介于标题(16)和普通标签(12)之间 */
+        font-weight: 700; 
+        color: var(--text-main);
         margin-bottom: 10px;
-        margin-top: 0; /* 移除顶部间距 */
+        margin-top: 0;
     }
 
     /* 通用输入框样式 */
@@ -116,12 +120,20 @@
       transition: all 0.2s ease;
     }
     input:hover, textarea:hover { border-color: rgba(0,113,227,0.4); background: rgba(255,255,255,0.9); }
-    input:focus, textarea:focus { background: #fff; border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(0,113,227,0.15); }
     
-    /* V16.9 优化：目标金额输入框 (缩小面积，平衡权重) */
+    /* V16.91 优化：全局统一的、更精致轻薄的聚焦光圈 */
+    input:focus, textarea:focus { 
+        background: #fff; 
+        border-color: var(--primary); 
+        outline: none; 
+        /* 将 shadow 扩散半径从 3px 减为 2px，并微调透明度 */
+        box-shadow: 0 0 0 2px rgba(0,113,227,0.2); 
+    }
+    
+    /* 目标金额输入框 */
     #target-input { 
-        font-size: 20px; /* 从 24px 降级 */
-        padding: 12px; /* 稍微减小内边距 */
+        font-size: 20px;
+        padding: 12px;
         font-weight: 500;
         color: var(--primary); 
     }
@@ -162,7 +174,6 @@
     button { cursor: pointer; border: none; font-weight: 600; transition: all 0.2s; font-family: inherit; }
     button:active { transform: scale(0.97); }
 
-    /* 精致的蓝色操作按钮 */
     .btn-action-blue { 
         background: var(--primary); color: #fff; 
         padding: 5px 12px; 
@@ -204,7 +215,8 @@
     .btn-del-confirm { background: var(--danger); color: white !important; }
     .btn-del-confirm:hover { background: #d70015; }
 
-    .status-pill { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: #86868b; }
+    /* V16.91 优化：修复 Ready 字间距 */
+    .status-pill { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: #86868b; letter-spacing: normal; }
     .dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; }
 
     #toast {
@@ -245,7 +257,7 @@
 <div class="main-wrapper">
   <div class="top-header">
     <h1>发票智能计算控制台</h1>
-    <span class="version-tag">V16.9 Aurora</span>
+    <span class="version-tag">V16.91 Aurora - LTS</span>
   </div>
 
   <div class="layout-grid">
