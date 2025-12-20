@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票控制台 V16.6 - Fixed Anchor Layout</title>
+  <title>发票控制台 V16.7 - Absolute Alignment</title>
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <style>
     :root {
@@ -26,39 +26,69 @@
       background: var(--bg-gradient); background-attachment: fixed;
       color: var(--text-main); font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       min-height: 100vh;
-      padding-bottom: 120px; /* 给底部悬浮栏留位 */
+      /* 底部留白，防止内容被悬浮栏遮挡 */
+      padding-bottom: 120px; 
       display: flex; flex-direction: column;
     }
 
     .main-wrapper { 
         width: 96%; max-width: 1650px; margin: 25px auto; 
-        /* 不设高度，高度由内容决定，但通过 Grid 强制列等高 */
-        display: flex; 
-        flex-direction: column;
+        flex: 1; 
+        position: relative; /* 为子元素定位做准备 */
     }
     
     .top-header { 
-        margin-bottom: 20px; display: flex; align-items: center; gap: 15px; 
+        margin-bottom: 20px; display: flex; align-items: center; gap: 15px; flex-shrink: 0;
     }
     h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; color: #1d1d1f; }
     .version-tag { font-size: 12px; font-weight: 500; color: #fff; background: var(--primary); padding: 4px 10px; border-radius: 12px;}
 
-    /* === V16.6 核心布局：强制对齐 === */
+    /* === V16.7 核心布局：绝对寄生架构 === */
     .layout-grid { 
       display: grid; 
       grid-template-columns: 340px 1fr 340px; 
       gap: 24px; 
-      /* 关键：让左栏和右栏的高度，强制拉伸至与最高的栏（中栏）相等 */
-      align-items: stretch; 
+      /* 让每一行都具备定位上下文 */
+      position: relative; 
     }
 
-    /* 列容器：Flex 垂直排列 */
-    .column-col { 
-        display: flex; flex-direction: column; gap: 20px; 
+    /* 1. 中栏：普通文档流。它决定了整个 Grid 的高度 */
+    .col-center-wrapper {
+        grid-column: 2; /* 放在中间 */
+        display: flex; flex-direction: column; gap: 20px;
     }
 
-    /* 响应式 */
-    @media (max-width: 1200px) { .layout-grid { grid-template-columns: 320px 1fr; } #col-right { display: none; } }
+    /* 2. 左栏容器：强制占位，但内容绝对定位 */
+    .col-left-placeholder {
+        grid-column: 1;
+        position: relative; /* 关键：作为绝对定位内容的父级 */
+    }
+    /* 左栏实际内容：死死贴合容器高度 */
+    .col-left-content {
+        position: absolute; 
+        top: 0; bottom: 0; left: 0; right: 0;
+        display: flex; flex-direction: column; gap: 20px;
+    }
+
+    /* 3. 右栏容器：同理 */
+    .col-right-placeholder {
+        grid-column: 3;
+        position: relative;
+    }
+    .col-right-content {
+        position: absolute; 
+        top: 0; bottom: 0; left: 0; right: 0;
+        display: flex; flex-direction: column; gap: 20px;
+    }
+
+    /* 响应式：小屏恢复普通流 */
+    @media (max-width: 1200px) { 
+        .layout-grid { display: flex; flex-direction: column; }
+        .col-left-placeholder, .col-right-placeholder { position: static; height: auto; }
+        .col-left-content, .col-right-content { position: static; }
+        .col-center-wrapper { order: -1; } /* 结果优先显示 */
+        #result-output { height: auto !important; min-height: 400px; }
+    }
 
     .glass-card {
       background: var(--glass); backdrop-filter: blur(var(--blur)); -webkit-backdrop-filter: blur(var(--blur));
@@ -68,47 +98,42 @@
       transition: transform 0.2s;
     }
     
-    /* === 核心高度控制类 === */
+    /* === 卡片高度策略 === */
+    .card-fixed { flex-shrink: 0; }
 
-    /* 1. 固定高度卡片 (Fixed) */
-    /* 用于：配置区、修正区、库存区、维护区 */
-    .card-fixed { 
-        flex-shrink: 0; /* 禁止被压缩 */
-    }
-
-    /* 2. 结果区专用固定 (Anchor) */
-    /* 它决定了中栏的总高度，进而决定了全页面的基准高度 */
+    /* 结果区：580px 死高，它是全页面的标尺 */
     .card-result-anchor {
-        height: 580px; /* 死死固定 */
+        height: 580px; 
         flex-shrink: 0;
         display: flex; flex-direction: column;
     }
 
-    /* 3. 自动填充卡片 (Fill) */
-    /* 用于：抬头管理、删除记录 */
-    /* 它们会自动伸长，去填满由于对齐中栏而产生的空白 */
+    /* 自动填充卡片：在绝对定位的列中，它们会吃掉剩余空间 */
     .card-fill { 
-        flex: 1; /* 占据剩余所有空间 */
-        display: flex; flex-direction: column;
-        min-height: 0; /* 允许 flex 容器计算高度 */
+        flex: 1; 
+        display: flex; flex-direction: column; 
+        min-height: 0; 
+        overflow: hidden; /* 必须！防止撑开绝对定位容器 */
     }
 
-    /* === 内部滚动控制 === */
-    /* 所有需要滚动的区域都套用这个 */
-    .scroll-content {
-        flex: 1; /* 填满父容器 */
-        overflow-y: auto; /* 开启滚动 */
-        padding-right: 6px;
+    /* 内部滚动区 */
+    #result-output {
+        font-family: "SF Mono", Menlo, Monaco, monospace; font-size: 14px; line-height: 1.7;
+        background: rgba(255,255,255,0.7); padding: 25px; border-radius: 16px; 
+        flex: 1; overflow-y: auto; 
+        white-space: pre-wrap; border: 1px solid rgba(255,255,255,0.9); color: #333;
+    }
+
+    .inner-scroll-box {
+        flex: 1; 
+        overflow-y: auto; 
+        padding-right: 5px;
+        /* 防止滚动区域消失 */
+        min-height: 100px; 
     }
     
-    /* 滚动条美化 */
-    .scroll-content::-webkit-scrollbar { width: 5px; }
-    .scroll-content::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
-
-    /* 结果区文字容器 */
-    #result-output {
-        white-space: pre-wrap; color: #333; font-family: "SF Mono", monospace; font-size: 14px; line-height: 1.7;
-    }
+    #result-output::-webkit-scrollbar, .inner-scroll-box::-webkit-scrollbar { width: 5px; }
+    #result-output::-webkit-scrollbar-thumb, .inner-scroll-box::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
 
     .card-title { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .card-title::after { content: ""; flex: 1; height: 1px; background: rgba(0,0,0,0.06); margin-left: 10px; }
@@ -207,52 +232,54 @@
 <div id="loading-overlay">
   <div class="spinner"></div>
   <p style="margin-top:20px; font-weight:600; font-size:15px; color:#333;">正在进行智能组合计算...</p>
-  <p id="retry-count" style="font-family:monospace; color:var(--text-sub); margin-top:8px; font-size:13px;">...</p>
+  <p id="retry-count" style="font-family:monospace; color:var(--text-sub); margin-top:8px; font-size:13px;">初始化中...</p>
 </div>
 
 <div class="main-wrapper">
   <div class="top-header">
     <h1>发票智能计算控制台</h1>
-    <span class="version-tag">V16.6 Anchor Fixed</span>
+    <span class="version-tag">V16.7 Absolute Align</span>
   </div>
 
   <div class="layout-grid">
     
-    <div class="column-col" id="col-left">
-      <div class="glass-card card-fixed">
-        <div class="card-title">⚙️ 开票需求配置</div>
-        <label style="margin-top:0;">目标开票总额</label>
-        <input id="target-input" type="number" placeholder="输入金额..." style="font-size: 24px; font-weight: 700; color:var(--primary); padding: 14px; background:rgba(0,113,227,0.05); border:1px solid rgba(0,113,227,0.15);">
-        
-        <div class="flex-grid" style="margin-top:20px;">
-          <div><label>起始订单</label><input id="filter-order-min" type="text" placeholder="如 290"></div>
-          <div><label>截止订单</label><input id="filter-order-max" type="text"></div>
-        </div>
-        <div class="flex-grid">
-          <div><label>单笔最小</label><input id="min-single" type="number"></div>
-          <div><label>单笔最大</label><input id="max-single" type="number"></div>
-        </div>
-        <div class="flex-grid">
-          <div><label>同额上限</label><input id="max-same-count" type="number" placeholder="不限"></div>
-          <div><label>要求张数</label><input id="invoice-count" type="number" placeholder="不限"></div>
-        </div>
-        <div style="display:flex; gap:25px; margin-top:20px;">
-          <label style="display:flex; align-items:center; cursor:pointer; text-transform:none; margin:0;"><input type="checkbox" id="allow-approx" style="width:16px; height:16px; margin-right:8px; accent-color:var(--primary);"> 允许误差匹配</label>
-          <label style="display:flex; align-items:center; cursor:pointer; text-transform:none; margin:0;"><input type="checkbox" id="only-higher" style="width:16px; height:16px; margin-right:8px; accent-color:var(--primary);"> 结果不小于目标</label>
-        </div>
-      </div>
+    <div class="col-left-placeholder">
+        <div class="col-left-content">
+            <div class="glass-card card-fixed">
+                <div class="card-title">⚙️ 开票需求配置</div>
+                <label style="margin-top:0;">目标开票总额</label>
+                <input id="target-input" type="number" placeholder="输入金额..." style="font-size: 24px; font-weight: 700; color:var(--primary); padding: 14px; background:rgba(0,113,227,0.05); border:1px solid rgba(0,113,227,0.15);">
+                
+                <div class="flex-grid" style="margin-top:20px;">
+                <div><label>起始订单</label><input id="filter-order-min" type="text" placeholder="如 290"></div>
+                <div><label>截止订单</label><input id="filter-order-max" type="text"></div>
+                </div>
+                <div class="flex-grid">
+                <div><label>单笔最小</label><input id="min-single" type="number"></div>
+                <div><label>单笔最大</label><input id="max-single" type="number"></div>
+                </div>
+                <div class="flex-grid">
+                <div><label>同额上限</label><input id="max-same-count" type="number" placeholder="不限"></div>
+                <div><label>要求张数</label><input id="invoice-count" type="number" placeholder="不限"></div>
+                </div>
+                <div style="display:flex; gap:25px; margin-top:20px;">
+                <label style="display:flex; align-items:center; cursor:pointer; text-transform:none; margin:0;"><input type="checkbox" id="allow-approx" style="width:16px; height:16px; margin-right:8px; accent-color:var(--primary);"> 允许误差匹配</label>
+                <label style="display:flex; align-items:center; cursor:pointer; text-transform:none; margin:0;"><input type="checkbox" id="only-higher" style="width:16px; height:16px; margin-right:8px; accent-color:var(--primary);"> 结果不小于目标</label>
+                </div>
+            </div>
 
-      <div class="glass-card card-fill">
-        <div class="card-title">📑 抬头管理 (自动保存)</div>
-        <textarea id="company-header" class="textarea-header" placeholder="在此粘贴抬头及税号信息..."></textarea>
-        <div id="header-history" class="scroll-content"></div>
-      </div>
+            <div class="glass-card card-fill">
+                <div class="card-title">📑 抬头管理 (自动保存)</div>
+                <textarea id="company-header" class="textarea-header" placeholder="在此粘贴抬头及税号信息..."></textarea>
+                <div id="header-history" class="inner-scroll-box"></div>
+            </div>
+        </div>
     </div>
 
-    <div class="column-col" id="col-center">
+    <div class="col-center-wrapper">
       <div class="glass-card card-result-anchor">
         <div class="card-title">✨ 智能组合结果</div>
-        <div id="result-output" class="scroll-content">请在左侧设置目标金额，然后点击底部“执行智能计算”按钮。</div>
+        <div id="result-output">请在左侧设置目标金额，然后点击底部“执行智能计算”按钮。</div>
       </div>
 
       <div class="glass-card card-fixed">
@@ -270,21 +297,23 @@
       </div>
     </div>
 
-    <div class="column-col" id="col-right">
-      <div class="glass-card card-fill">
-        <div class="card-title">🗑 已删除记录 (可恢复)</div>
-        <div id="record-list" class="scroll-content"></div>
-      </div>
+    <div class="col-right-placeholder">
+        <div class="col-right-content">
+            <div class="glass-card card-fill">
+                <div class="card-title">🗑 已删除记录 (可恢复)</div>
+                <div id="record-list" class="inner-scroll-box"></div>
+            </div>
 
-      <div class="glass-card card-fixed">
-        <div class="card-title">📦 数据维护</div>
-        <div class="flex-grid">
-          <button id="backup-btn" class="footer-btn" style="flex:1; justify-content:center; background:rgba(0,0,0,0.03); font-size:13px;">📤 导出</button>
-          <button id="restore-btn" class="footer-btn" style="flex:1; justify-content:center; background:rgba(0,0,0,0.03); font-size:13px;">📥 恢复</button>
+            <div class="glass-card card-fixed">
+                <div class="card-title">📦 数据维护</div>
+                <div class="flex-grid">
+                <button id="backup-btn" class="footer-btn" style="flex:1; justify-content:center; background:rgba(0,0,0,0.03); font-size:13px;">📤 导出</button>
+                <button id="restore-btn" class="footer-btn" style="flex:1; justify-content:center; background:rgba(0,0,0,0.03); font-size:13px;">📥 恢复</button>
+                </div>
+                <button id="reset-btn" class="footer-btn" style="width:100%; margin-top:10px; padding:10px; justify-content:center; color:var(--danger); border:1px dashed rgba(255,59,48,0.2); background:none; font-size:12px;">🔄 重置系统</button>
+                <input type="file" id="restore-input" style="display:none" accept=".json">
+            </div>
         </div>
-        <button id="reset-btn" class="footer-btn" style="width:100%; margin-top:10px; padding:10px; justify-content:center; color:var(--danger); border:1px dashed rgba(255,59,48,0.2); background:none; font-size:12px;">🔄 重置系统</button>
-        <input type="file" id="restore-input" style="display:none" accept=".json">
-      </div>
     </div>
 
   </div>
@@ -391,6 +420,7 @@ function renderHeaderHistory() {
   const div = document.getElementById('header-history'); if(!div) return; div.innerHTML = '';
   loadHeaderHistory().forEach((h, i) => {
     const chip = document.createElement('div'); chip.className = 'chip';
+    // 允许显示完整多行文本
     chip.innerHTML = `<span style="white-space:pre-wrap; line-height:1.3; flex:1;">${h}</span><span style="margin-left:10px; color:#ccc; font-size:14px;">✕</span>`;
     chip.onclick = () => document.getElementById('company-header').value = h;
     chip.querySelector('span:last-child').onclick = (e) => { 
@@ -422,7 +452,7 @@ function renderDeleteRecords() {
   }
 }
 
-/* ====== 核心逻辑 V15.1 ====== */
+/* ====== 核心逻辑 V15.1 (Fail-Fast + Merge) ====== */
 function selectOrdersByDP(target, maxSingle, allowApprox, onlyHigher, minOrderStr, maxOrderStr, usePool) {
   let pool = usePool.slice();
   if (minOrderStr) pool = pool.filter(o => o.order >= minOrderStr);
