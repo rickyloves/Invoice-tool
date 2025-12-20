@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票控制台 V16.7 - Absolute Alignment</title>
+  <title>发票控制台 V16.8 Aurora</title>
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <style>
     :root {
@@ -26,7 +26,6 @@
       background: var(--bg-gradient); background-attachment: fixed;
       color: var(--text-main); font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       min-height: 100vh;
-      /* 底部留白，防止内容被悬浮栏遮挡 */
       padding-bottom: 120px; 
       display: flex; flex-direction: column;
     }
@@ -34,59 +33,51 @@
     .main-wrapper { 
         width: 96%; max-width: 1650px; margin: 25px auto; 
         flex: 1; 
-        position: relative; /* 为子元素定位做准备 */
+        position: relative; 
     }
     
     .top-header { 
-        margin-bottom: 20px; display: flex; align-items: center; gap: 15px; flex-shrink: 0;
+        margin-bottom: 20px; display: flex; align-items: center; gap: 12px; flex-shrink: 0;
     }
     h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; color: #1d1d1f; }
-    .version-tag { font-size: 12px; font-weight: 500; color: #fff; background: var(--primary); padding: 4px 10px; border-radius: 12px;}
+    
+    /* V16.8 优化：低调优雅的版本号 */
+    .version-tag { 
+        font-size: 12px; font-weight: 500; color: #86868b; 
+        background: rgba(0,0,0,0.04); padding: 4px 10px; border-radius: 12px;
+        letter-spacing: 0.5px;
+    }
 
-    /* === V16.7 核心布局：绝对寄生架构 === */
+    /* === 布局架构：绝对定位对齐 (V16.7 核心) === */
     .layout-grid { 
       display: grid; 
       grid-template-columns: 340px 1fr 340px; 
       gap: 24px; 
-      /* 让每一行都具备定位上下文 */
       position: relative; 
     }
 
-    /* 1. 中栏：普通文档流。它决定了整个 Grid 的高度 */
     .col-center-wrapper {
-        grid-column: 2; /* 放在中间 */
+        grid-column: 2; 
         display: flex; flex-direction: column; gap: 20px;
     }
 
-    /* 2. 左栏容器：强制占位，但内容绝对定位 */
-    .col-left-placeholder {
-        grid-column: 1;
-        position: relative; /* 关键：作为绝对定位内容的父级 */
-    }
-    /* 左栏实际内容：死死贴合容器高度 */
+    .col-left-placeholder { grid-column: 1; position: relative; }
     .col-left-content {
-        position: absolute; 
-        top: 0; bottom: 0; left: 0; right: 0;
+        position: absolute; top: 0; bottom: 0; left: 0; right: 0;
         display: flex; flex-direction: column; gap: 20px;
     }
 
-    /* 3. 右栏容器：同理 */
-    .col-right-placeholder {
-        grid-column: 3;
-        position: relative;
-    }
+    .col-right-placeholder { grid-column: 3; position: relative; }
     .col-right-content {
-        position: absolute; 
-        top: 0; bottom: 0; left: 0; right: 0;
+        position: absolute; top: 0; bottom: 0; left: 0; right: 0;
         display: flex; flex-direction: column; gap: 20px;
     }
 
-    /* 响应式：小屏恢复普通流 */
     @media (max-width: 1200px) { 
         .layout-grid { display: flex; flex-direction: column; }
         .col-left-placeholder, .col-right-placeholder { position: static; height: auto; }
         .col-left-content, .col-right-content { position: static; }
-        .col-center-wrapper { order: -1; } /* 结果优先显示 */
+        .col-center-wrapper { order: -1; }
         #result-output { height: auto !important; min-height: 400px; }
     }
 
@@ -98,25 +89,32 @@
       transition: transform 0.2s;
     }
     
-    /* === 卡片高度策略 === */
     .card-fixed { flex-shrink: 0; }
+    .card-result-anchor { height: 580px; flex-shrink: 0; display: flex; flex-direction: column; }
+    .card-fill { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 
-    /* 结果区：580px 死高，它是全页面的标尺 */
-    .card-result-anchor {
-        height: 580px; 
-        flex-shrink: 0;
-        display: flex; flex-direction: column;
+    .card-title { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .card-title::after { content: ""; flex: 1; height: 1px; background: rgba(0,0,0,0.06); margin-left: 10px; }
+
+    label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sub); margin-bottom: 8px; margin-top: 12px; }
+    
+    /* V16.8 优化：输入框 Hover 效果 */
+    input, textarea {
+      width: 100%; border: 1px solid rgba(0,0,0,0.1); border-radius: 10px;
+      padding: 12px; font-size: 14px; background: rgba(255,255,255,0.7); 
+      transition: all 0.2s ease;
     }
-
-    /* 自动填充卡片：在绝对定位的列中，它们会吃掉剩余空间 */
-    .card-fill { 
-        flex: 1; 
-        display: flex; flex-direction: column; 
-        min-height: 0; 
-        overflow: hidden; /* 必须！防止撑开绝对定位容器 */
+    /* 鼠标悬停时的优雅反馈 */
+    input:hover, textarea:hover { border-color: rgba(0,113,227,0.4); background: rgba(255,255,255,0.9); }
+    input:focus, textarea:focus { background: #fff; border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(0,113,227,0.15); }
+    
+    /* V16.8 优化：目标金额输入框去笨重化 */
+    #target-input { 
+        font-weight: 500; /* 从700降到500 */
+        color: var(--primary); 
     }
+    #target-input::placeholder { color: #aaa; font-weight: 400; }
 
-    /* 内部滚动区 */
     #result-output {
         font-family: "SF Mono", Menlo, Monaco, monospace; font-size: 14px; line-height: 1.7;
         background: rgba(255,255,255,0.7); padding: 25px; border-radius: 16px; 
@@ -124,27 +122,11 @@
         white-space: pre-wrap; border: 1px solid rgba(255,255,255,0.9); color: #333;
     }
 
-    .inner-scroll-box {
-        flex: 1; 
-        overflow-y: auto; 
-        padding-right: 5px;
-        /* 防止滚动区域消失 */
-        min-height: 100px; 
-    }
+    .inner-scroll-box { flex: 1; overflow-y: auto; padding-right: 5px; min-height: 100px; }
     
     #result-output::-webkit-scrollbar, .inner-scroll-box::-webkit-scrollbar { width: 5px; }
     #result-output::-webkit-scrollbar-thumb, .inner-scroll-box::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
 
-    .card-title { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-    .card-title::after { content: ""; flex: 1; height: 1px; background: rgba(0,0,0,0.06); margin-left: 10px; }
-
-    label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sub); margin-bottom: 8px; margin-top: 12px; }
-    input, textarea {
-      width: 100%; border: 1px solid rgba(0,0,0,0.1); border-radius: 10px;
-      padding: 12px; font-size: 14px; background: rgba(255,255,255,0.7); transition: all 0.2s;
-    }
-    input:focus, textarea:focus { background: #fff; border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(0,113,227,0.15); }
-    
     .textarea-header { resize: none; margin-bottom: 12px; height: 80px; flex-shrink: 0; }
 
     .flex-grid { display: flex; gap: 12px; margin-bottom: 8px; }
@@ -168,7 +150,21 @@
     button { cursor: pointer; border: none; font-weight: 600; transition: all 0.2s; font-family: inherit; }
     button:active { transform: scale(0.97); }
 
-    .btn-recover { background: var(--primary); color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 11px; }
+    /* V16.8 优化：恢复/查询按钮 (更精致的比例 + 悬停动画) */
+    .btn-action-blue { 
+        background: var(--primary); color: #fff; 
+        padding: 5px 12px; /* 调整 Padding */
+        border-radius: 8px; 
+        font-size: 13px; /* 字体加大 */
+        font-weight: 600;
+        transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .btn-action-blue:hover {
+        transform: translateY(-2px); /* 轻微上浮 */
+        box-shadow: 0 4px 12px rgba(0,113,227,0.3); /* 投影 */
+    }
+
+    /* 撤回整批按钮 (保持低调) */
     .btn-batch { width: 100%; margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.04); color: var(--text-sub); border-radius: 8px; font-size: 12px; }
     .btn-batch:hover { background: rgba(0,0,0,0.07); color: #333; }
 
@@ -186,6 +182,7 @@
         padding: 12px 22px; border-radius: 14px; font-size: 14px; white-space: nowrap;
         background: rgba(0,0,0,0.04); color: var(--text-main); display: flex; align-items: center; gap: 8px;
     }
+    /* 数据维护区的按钮没有特殊 Hover 动画，仅背景加深 */
     .footer-btn:hover { background: rgba(0,0,0,0.07); }
     
     .btn-compute { 
@@ -231,14 +228,14 @@
 
 <div id="loading-overlay">
   <div class="spinner"></div>
-  <p style="margin-top:20px; font-weight:600; font-size:15px; color:#333;">正在进行智能组合计算...</p>
-  <p id="retry-count" style="font-family:monospace; color:var(--text-sub); margin-top:8px; font-size:13px;">初始化中...</p>
+  <p style="margin-top:20px; font-weight:600; font-size:15px; color:#333;">正在计算方案...</p>
+  <p id="retry-count" style="font-family:monospace; color:var(--text-sub); margin-top:8px; font-size:13px;">...</p>
 </div>
 
 <div class="main-wrapper">
   <div class="top-header">
     <h1>发票智能计算控制台</h1>
-    <span class="version-tag">V16.7 Absolute Align</span>
+    <span class="version-tag">V16.8 Aurora</span>
   </div>
 
   <div class="layout-grid">
@@ -248,7 +245,7 @@
             <div class="glass-card card-fixed">
                 <div class="card-title">⚙️ 开票需求配置</div>
                 <label style="margin-top:0;">目标开票总额</label>
-                <input id="target-input" type="number" placeholder="输入金额..." style="font-size: 24px; font-weight: 700; color:var(--primary); padding: 14px; background:rgba(0,113,227,0.05); border:1px solid rgba(0,113,227,0.15);">
+                <input id="target-input" type="number" placeholder="输入金额..." style="font-size: 24px; padding: 14px; background:rgba(0,113,227,0.05); border:1px solid rgba(0,113,227,0.15);">
                 
                 <div class="flex-grid" style="margin-top:20px;">
                 <div><label>起始订单</label><input id="filter-order-min" type="text" placeholder="如 290"></div>
@@ -286,7 +283,7 @@
         <div class="card-title">🛠 快捷订单修正</div>
         <div class="flex-grid" style="margin-bottom:12px; gap:10px;">
             <input id="search-order-input" type="text" placeholder="输入订单号..." style="padding:10px;">
-            <button id="btn-search-order" style="width:70px; background:var(--primary); color:white; border-radius:12px; font-size:13px;">查询</button>
+            <button id="btn-search-order" class="btn-action-blue" style="width:80px;">查询</button>
         </div>
         <div id="edit-result-area"></div>
       </div>
@@ -443,7 +440,8 @@ function renderDeleteRecords() {
         let html = `<div style="display:flex; justify-content:space-between; margin-bottom:12px; padding-bottom:8px; border-bottom:1px dashed rgba(0,0,0,0.1);"><b style="font-size:14px; color:#333;">批次 ${batchIdx + 1}</b> <span style="font-weight:800; color:var(--primary); font-size:15px;">${total.toLocaleString()} 元</span></div>`;
         batch.forEach((inv, invIdx) => {
             inv.orders.forEach((o, orderIdx) => {
-               html += `<div class="order-line"><span><span style="color:#666; margin-right:5px;">${o.order}</span> <b style="color:#333;">${o.amount} 元</b></span><button class="btn-recover" onclick="recoverSingleOrder(${batchIdx}, ${invIdx}, ${orderIdx})">恢复</button></div>`;
+               // 使用新的按钮类
+               html += `<div class="order-line"><span><span style="color:#666; margin-right:5px;">${o.order}</span> <b style="color:#333;">${o.amount} 元</b></span><button class="btn-action-blue" onclick="recoverSingleOrder(${batchIdx}, ${invIdx}, ${orderIdx})" style="font-size:12px; padding:3px 10px;">恢复</button></div>`;
             });
         });
         html += `<button class="btn-batch" onclick="recoverBatch(${batchIdx})">↺ 撤回整批删除</button>`;
