@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>发票控制台 V16.8 Aurora</title>
+  <title>发票控制台 V16.9 Aurora - LTS</title>
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <style>
     :root {
@@ -41,11 +41,11 @@
     }
     h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; color: #1d1d1f; }
     
-    /* V16.8 优化：低调优雅的版本号 */
+    /* V16.9 优化：移除人为添加的 letter-spacing，回归苹果原生紧凑感 */
     .version-tag { 
         font-size: 12px; font-weight: 500; color: #86868b; 
         background: rgba(0,0,0,0.04); padding: 4px 10px; border-radius: 12px;
-        letter-spacing: 0.5px;
+        /* letter-spacing: 0.5px;  <-- 已移除 */
     }
 
     /* === 布局架构：绝对定位对齐 (V16.7 核心) === */
@@ -96,21 +96,33 @@
     .card-title { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .card-title::after { content: ""; flex: 1; height: 1px; background: rgba(0,0,0,0.06); margin-left: 10px; }
 
+    /* 通用标签样式 */
     label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sub); margin-bottom: 8px; margin-top: 12px; }
     
-    /* V16.8 优化：输入框 Hover 效果 */
+    /* V16.9 新增：主标签样式 (用于目标金额) */
+    .main-label {
+        display: block;
+        font-size: 15px; /* 加大字号 */
+        font-weight: 700; /* 加粗 */
+        color: var(--text-main); /* 使用深色主文本色 */
+        margin-bottom: 10px;
+        margin-top: 0; /* 移除顶部间距 */
+    }
+
+    /* 通用输入框样式 */
     input, textarea {
       width: 100%; border: 1px solid rgba(0,0,0,0.1); border-radius: 10px;
       padding: 12px; font-size: 14px; background: rgba(255,255,255,0.7); 
       transition: all 0.2s ease;
     }
-    /* 鼠标悬停时的优雅反馈 */
     input:hover, textarea:hover { border-color: rgba(0,113,227,0.4); background: rgba(255,255,255,0.9); }
     input:focus, textarea:focus { background: #fff; border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(0,113,227,0.15); }
     
-    /* V16.8 优化：目标金额输入框去笨重化 */
+    /* V16.9 优化：目标金额输入框 (缩小面积，平衡权重) */
     #target-input { 
-        font-weight: 500; /* 从700降到500 */
+        font-size: 20px; /* 从 24px 降级 */
+        padding: 12px; /* 稍微减小内边距 */
+        font-weight: 500;
         color: var(--primary); 
     }
     #target-input::placeholder { color: #aaa; font-weight: 400; }
@@ -150,21 +162,20 @@
     button { cursor: pointer; border: none; font-weight: 600; transition: all 0.2s; font-family: inherit; }
     button:active { transform: scale(0.97); }
 
-    /* V16.8 优化：恢复/查询按钮 (更精致的比例 + 悬停动画) */
+    /* 精致的蓝色操作按钮 */
     .btn-action-blue { 
         background: var(--primary); color: #fff; 
-        padding: 5px 12px; /* 调整 Padding */
+        padding: 5px 12px; 
         border-radius: 8px; 
-        font-size: 13px; /* 字体加大 */
+        font-size: 13px; 
         font-weight: 600;
         transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
     .btn-action-blue:hover {
-        transform: translateY(-2px); /* 轻微上浮 */
-        box-shadow: 0 4px 12px rgba(0,113,227,0.3); /* 投影 */
+        transform: translateY(-2px); 
+        box-shadow: 0 4px 12px rgba(0,113,227,0.3); 
     }
 
-    /* 撤回整批按钮 (保持低调) */
     .btn-batch { width: 100%; margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.04); color: var(--text-sub); border-radius: 8px; font-size: 12px; }
     .btn-batch:hover { background: rgba(0,0,0,0.07); color: #333; }
 
@@ -182,7 +193,6 @@
         padding: 12px 22px; border-radius: 14px; font-size: 14px; white-space: nowrap;
         background: rgba(0,0,0,0.04); color: var(--text-main); display: flex; align-items: center; gap: 8px;
     }
-    /* 数据维护区的按钮没有特殊 Hover 动画，仅背景加深 */
     .footer-btn:hover { background: rgba(0,0,0,0.07); }
     
     .btn-compute { 
@@ -235,7 +245,7 @@
 <div class="main-wrapper">
   <div class="top-header">
     <h1>发票智能计算控制台</h1>
-    <span class="version-tag">V16.8 Aurora</span>
+    <span class="version-tag">V16.9 Aurora</span>
   </div>
 
   <div class="layout-grid">
@@ -244,8 +254,8 @@
         <div class="col-left-content">
             <div class="glass-card card-fixed">
                 <div class="card-title">⚙️ 开票需求配置</div>
-                <label style="margin-top:0;">目标开票总额</label>
-                <input id="target-input" type="number" placeholder="输入金额..." style="font-size: 24px; padding: 14px; background:rgba(0,113,227,0.05); border:1px solid rgba(0,113,227,0.15);">
+                <label class="main-label">目标开票总额</label>
+                <input id="target-input" type="number" placeholder="输入金额..." style="background:rgba(0,113,227,0.05); border:1px solid rgba(0,113,227,0.15);">
                 
                 <div class="flex-grid" style="margin-top:20px;">
                 <div><label>起始订单</label><input id="filter-order-min" type="text" placeholder="如 290"></div>
